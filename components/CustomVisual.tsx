@@ -14,6 +14,7 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
   useEffect(() => {
     if (scriptRan.current) return;
 
+    // Helper to load script and WAIT for it to finish
     const loadScript = (src: string, id: string) => {
       return new Promise((resolve, reject) => {
         if (document.getElementById(id)) {
@@ -23,7 +24,7 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
         const script = document.createElement('script');
         script.src = src;
         script.id = id;
-        script.async = false; // Critical: Ensure sequential execution
+        script.async = false; // Force sequential loading
         script.onload = () => resolve(true);
         script.onerror = () => reject(new Error(`Failed to load ${src}`));
         document.body.appendChild(script);
@@ -32,33 +33,34 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
     const init = async () => {
       try {
-        setStatus("Loading 3D Engine...");
+        setStatus("Loading Stable 3D Engine...");
 
-        // 1. Load Three.js (Version 0.160 - Modern & Stable)
-        // We use the specific 'min.js' build to avoid 'exports not defined' errors
+        // 1. Load Three.js r124 (The "Golden Era" version for script tags)
         if (!(window as any).THREE) {
-          await loadScript("//unpkg.com/three@0.160.0/build/three.min.js", "three-lib");
+          await loadScript("//unpkg.com/three@0.124.0/build/three.min.js", "three-lib");
         }
-        console.log("✅ THREE Ready");
+        console.log("✅ THREE r124 Ready");
 
-        // 2. Load Globe.gl (Version 2.30 - Designed for Three 0.160)
+        // 2. Load Globe.gl 2.26 (Compatible Peer Version)
         setStatus("Loading Globe Library...");
         if (!(window as any).Globe) {
-          await loadScript("//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js", "globe-lib");
+          await loadScript("//unpkg.com/globe.gl@2.26.4/dist/globe.gl.min.js", "globe-lib");
         }
-        console.log("✅ Globe Ready");
+        console.log("✅ Globe 2.26 Ready");
 
         // 3. Executing User Script
         setStatus("Starting Visualization...");
+        
+        // Give it 200ms to settle
         setTimeout(() => {
            if ((window as any).Globe) {
               
-              // Execute the code stored in Supabase
+              // Run the code from Supabase
               const runVisual = new Function(scriptContent);
               runVisual();
               
               scriptRan.current = true;
-              setStatus(""); // Clear Debug Message
+              setStatus(""); 
            } else {
               setStatus("Error: Globe symbol missing.");
            }
@@ -76,9 +78,9 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
   return (
     <>
-      {/* Debug Overlay: Only shows if loading or error */}
+      {/* Debug Overlay */}
       {status && (
-        <div className="fixed top-20 left-4 z-50 bg-blue-900/90 text-white px-4 py-2 rounded shadow-lg text-xs font-mono border border-blue-500">
+        <div className="fixed top-20 left-4 z-50 bg-black/80 text-green-400 px-4 py-2 rounded shadow-lg text-xs font-mono border border-green-700">
           STATUS: {status}
         </div>
       )}
