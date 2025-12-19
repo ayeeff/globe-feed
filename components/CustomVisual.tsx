@@ -12,38 +12,51 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
   const scriptRan = useRef(false);
 
   useEffect(() => {
+    // If we've already run this script, stop.
     if (scriptRan.current) return;
 
-    // Check every 100ms if the external libraries are loaded
+    // Timer to check if global libraries are ready
     const checkLibs = setInterval(() => {
-      // Cast window to 'any' to access dynamic properties
+      // We look for 'Globe' and 'THREE' on the window object
       if ((window as any).Globe && (window as any).THREE) {
         clearInterval(checkLibs);
         
         try {
+          console.log("🚀 Executing Custom Script from Database...");
           // Execute the code safely
           const dynamicFunction = new Function(scriptContent);
           dynamicFunction();
           scriptRan.current = true;
         } catch (err) {
-          console.error("Script Error:", err);
+          console.error("❌ Custom Script Error:", err);
         }
       }
-    }, 100);
+    }, 100); // Check every 100ms
 
     return () => clearInterval(checkLibs);
   }, [scriptContent]);
 
   return (
     <>
-      {/* 1. Load External Libraries */}
-      <Script src="//unpkg.com/three" strategy="afterInteractive" />
-      <Script src="//unpkg.com/globe.gl" strategy="afterInteractive" />
+      {/* FIXED CDN LINKS:
+        We point to the specific .min.js files to avoid 'exports not defined' errors.
+      */}
+      <Script 
+        src="//unpkg.com/three@0.160.0/build/three.min.js" 
+        strategy="beforeInteractive" 
+      />
+      <Script 
+        src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js" 
+        strategy="beforeInteractive" 
+        onLoad={() => {
+            console.log("✅ Globe.gl Loaded via CDN");
+        }}
+      />
 
-      {/* 2. Inject CSS */}
+      {/* Inject CSS */}
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
-      {/* 3. Inject HTML Structure */}
+      {/* Inject HTML Structure */}
       <div 
         className="w-full h-full"
         dangerouslySetInnerHTML={{ __html: html }} 
