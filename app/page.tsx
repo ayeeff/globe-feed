@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient'; // Make sure this path matches where you put the client
+import { supabase } from '../lib/supabaseClient'; // Make sure this path matches where you put the client
 import CustomVisual from '../components/CustomVisual';
 
 export default function Home() {
