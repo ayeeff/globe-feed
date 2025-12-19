@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
-import Script from 'next/script';
 
 interface CustomVisualProps {
   css: string;
@@ -15,66 +14,70 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
   useEffect(() => {
     if (scriptRan.current) return;
 
-    setStatus("Waiting for libraries...");
-
-    // Timer: We strictly wait for BOTH libraries to exist in the window
-    const checkLibs = setInterval(() => {
-      // 1. Check if Three.js is ready
-      // 2. Check if Globe is ready
-      if ((window as any).THREE && (window as any).Globe) {
-        clearInterval(checkLibs);
-        setStatus("Libraries ready. Executing script...");
-        
-        try {
-          // 3. Run your Supabase script
-          const dynamicFunction = new Function(scriptContent);
-          dynamicFunction();
-          
-          scriptRan.current = true;
-          setStatus(""); // Success! Clear the message.
-        } catch (err: any) {
-          console.error("❌ Custom Script Error:", err);
-          setStatus("Script Error: " + err.message);
+    // Helper to manually load a script and wait for it
+    const loadScript = (src: string) => {
+      return new Promise((resolve, reject) => {
+        // If already loaded, skip
+        if (document.querySelector(`script[src="${src}"]`)) {
+          resolve(true);
+          return;
         }
-      }
-    }, 200); // Check 5 times a second
-
-    // Safety Timeout (10 seconds)
-    const timeout = setTimeout(() => {
-      if (!scriptRan.current) {
-        clearInterval(checkLibs);
-        setStatus("Error: Timed out. Libraries failed to load.");
-      }
-    }, 10000);
-
-    return () => {
-      clearInterval(checkLibs);
-      clearTimeout(timeout);
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true; 
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.body.appendChild(script);
+      });
     };
+
+    const init = async () => {
+      try {
+        setStatus("Loading 3D Engine...");
+        
+        // 1. Load Three.js (Specific Version r124 - Known stable with globe.gl)
+        if (!(window as any).THREE) {
+          await loadScript("//unpkg.com/three@0.124.0/build/three.min.js");
+        }
+        console.log("✅ THREE Ready");
+
+        // 2. Load Globe.gl (Specific Version)
+        setStatus("Loading Globe Library...");
+        if (!(window as any).Globe) {
+          await loadScript("//unpkg.com/globe.gl@2.26.4/dist/globe.gl.min.js");
+        }
+        console.log("✅ Globe Ready");
+
+        // 3. Execute Your Code
+        setStatus("Starting Visualization...");
+        
+        // Small delay to ensure the library is fully parsed
+        setTimeout(() => {
+           if ((window as any).Globe) {
+              const dynamicFunction = new Function(scriptContent);
+              dynamicFunction();
+              scriptRan.current = true;
+              setStatus(""); // Success
+           } else {
+              throw new Error("Globe object missing after load");
+           }
+        }, 100);
+
+      } catch (err: any) {
+        console.error(err);
+        setStatus("Error: " + err.message);
+      }
+    };
+
+    init();
+
   }, [scriptContent]);
 
   return (
     <>
-      {/* CRITICAL LOAD ORDER: 
-        1. Three.js must load FIRST (beforeInteractive)
-        2. Globe.gl must load SECOND (afterInteractive)
-        
-        We use specific versions (r128) known to be stable with the CDN build.
-      */}
-      <Script 
-        src="//unpkg.com/three" 
-        strategy="beforeInteractive"
-        onLoad={() => console.log("✅ Three.js Loaded")}
-      />
-      <Script 
-        src="//unpkg.com/globe.gl" 
-        strategy="afterInteractive"
-        onLoad={() => console.log("✅ Globe.gl Loaded")}
-      />
-
-      {/* Debug Overlay (Shows status in top-left) */}
+      {/* Debug Overlay */}
       {status && (
-        <div className="fixed top-20 left-4 z-50 bg-black/80 text-green-400 px-4 py-2 rounded border border-green-800 font-mono text-xs">
+        <div className="fixed top-20 left-4 z-50 bg-black/80 text-yellow-400 px-4 py-2 rounded border border-yellow-800 font-mono text-xs shadow-xl backdrop-blur-md">
           [System]: {status}
         </div>
       )}
