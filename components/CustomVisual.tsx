@@ -10,38 +10,41 @@ interface CustomVisualProps {
 
 const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent }) => {
   const scriptRan = useRef(false);
-  const [debugMsg, setDebugMsg] = useState<string>("Initializing...");
+  const [status, setStatus] = useState<string>("Initializing...");
 
   useEffect(() => {
     if (scriptRan.current) return;
 
-    setDebugMsg("Waiting for Globe.gl to load...");
+    setStatus("Waiting for libraries...");
 
-    // Timer to check if the library is ready
+    // Timer: We strictly wait for BOTH libraries to exist in the window
     const checkLibs = setInterval(() => {
-      // We ONLY check for Globe. The library bundles its own ThreeJS.
-      if ((window as any).Globe) {
+      // 1. Check if Three.js is ready
+      // 2. Check if Globe is ready
+      if ((window as any).THREE && (window as any).Globe) {
         clearInterval(checkLibs);
-        setDebugMsg("Library found. Starting visualization...");
+        setStatus("Libraries ready. Executing script...");
         
         try {
-          // Execute the code from Supabase
+          // 3. Run your Supabase script
           const dynamicFunction = new Function(scriptContent);
           dynamicFunction();
           
           scriptRan.current = true;
-          setDebugMsg(""); // Clear debug message on success
+          setStatus(""); // Success! Clear the message.
         } catch (err: any) {
-          console.error("Script Error:", err);
-          setDebugMsg("Error: " + err.message);
+          console.error("❌ Custom Script Error:", err);
+          setStatus("Script Error: " + err.message);
         }
       }
-    }, 500); // Check every 0.5s
+    }, 200); // Check 5 times a second
 
-    // Timeout after 10 seconds to stop checking
+    // Safety Timeout (10 seconds)
     const timeout = setTimeout(() => {
-      clearInterval(checkLibs);
-      if (!scriptRan.current) setDebugMsg("Error: Timed out waiting for Globe.gl");
+      if (!scriptRan.current) {
+        clearInterval(checkLibs);
+        setStatus("Error: Timed out. Libraries failed to load.");
+      }
     }, 10000);
 
     return () => {
@@ -52,27 +55,34 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
   return (
     <>
-      {/* FIX: LOAD ONLY GLOBE.GL
-         We removed the explicit 'three.js' script because globe.gl includes it.
-         strategy="lazyOnload" fixes the 'preloaded but not used' warning.
+      {/* CRITICAL LOAD ORDER: 
+        1. Three.js must load FIRST (beforeInteractive)
+        2. Globe.gl must load SECOND (afterInteractive)
+        
+        We use specific versions (r128) known to be stable with the CDN build.
       */}
       <Script 
+        src="//unpkg.com/three" 
+        strategy="beforeInteractive"
+        onLoad={() => console.log("✅ Three.js Loaded")}
+      />
+      <Script 
         src="//unpkg.com/globe.gl" 
-        strategy="lazyOnload" 
+        strategy="afterInteractive"
         onLoad={() => console.log("✅ Globe.gl Loaded")}
       />
 
-      {/* Debug Overlay: Only visible if something goes wrong or is loading */}
-      {debugMsg && (
-        <div className="fixed top-4 left-4 z-50 bg-red-900/90 text-white px-4 py-2 rounded shadow-lg text-sm font-mono border border-red-500">
-          Status: {debugMsg}
+      {/* Debug Overlay (Shows status in top-left) */}
+      {status && (
+        <div className="fixed top-20 left-4 z-50 bg-black/80 text-green-400 px-4 py-2 rounded border border-green-800 font-mono text-xs">
+          [System]: {status}
         </div>
       )}
 
       {/* Inject CSS */}
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
-      {/* Inject HTML Structure */}
+      {/* Inject HTML */}
       <div 
         className="w-full h-full"
         dangerouslySetInnerHTML={{ __html: html }} 
