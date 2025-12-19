@@ -12,19 +12,18 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
   const [status, setStatus] = useState<string>("Initializing...");
 
   useEffect(() => {
-    // Prevent double-running
     if (scriptRan.current) return;
 
     const loadScript = (src: string, id: string) => {
       return new Promise((resolve, reject) => {
         if (document.getElementById(id)) {
-          resolve(true); // Already loaded
+          resolve(true); 
           return;
         }
         const script = document.createElement('script');
         script.src = src;
         script.id = id;
-        script.async = false; // Force synchronous-like execution order
+        script.async = false; // Critical: Ensure sequential execution
         script.onload = () => resolve(true);
         script.onerror = () => reject(new Error(`Failed to load ${src}`));
         document.body.appendChild(script);
@@ -35,40 +34,35 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
       try {
         setStatus("Loading 3D Engine...");
 
-        // 1. Load Three.js (Version r129 - Stable Standard)
+        // 1. Load Three.js (Version 0.160 - Modern & Stable)
+        // We use the specific 'min.js' build to avoid 'exports not defined' errors
         if (!(window as any).THREE) {
-          await loadScript("//unpkg.com/three@0.129.0/build/three.min.js", "three-lib");
+          await loadScript("//unpkg.com/three@0.160.0/build/three.min.js", "three-lib");
         }
-        
-        // 2. Explicitly ensure THREE is global (Fixes 'undefined' errors)
-        if ((window as any).THREE) {
-            console.log("✅ THREE Version:", (window as any).THREE.REVISION);
-        } else {
-            throw new Error("Three.js loaded but object is missing");
-        }
+        console.log("✅ THREE Ready");
 
-        // 3. Load Globe.gl (Version 2.23.4 - Matches Three r129)
+        // 2. Load Globe.gl (Version 2.30 - Designed for Three 0.160)
         setStatus("Loading Globe Library...");
         if (!(window as any).Globe) {
-          await loadScript("//unpkg.com/globe.gl@2.23.4/dist/globe.gl.min.js", "globe-lib");
+          await loadScript("//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js", "globe-lib");
         }
+        console.log("✅ Globe Ready");
 
-        // 4. Verify & Run
+        // 3. Executing User Script
         setStatus("Starting Visualization...");
         setTimeout(() => {
            if ((window as any).Globe) {
-              console.log("✅ Globe Ready. Executing User Script...");
               
-              // Wrap user script in a closure to protect variables
+              // Execute the code stored in Supabase
               const runVisual = new Function(scriptContent);
               runVisual();
               
               scriptRan.current = true;
-              setStatus(""); 
+              setStatus(""); // Clear Debug Message
            } else {
-              setStatus("Error: Globe library failed to initialize.");
+              setStatus("Error: Globe symbol missing.");
            }
-        }, 500); // Small buffer for parsing
+        }, 200);
 
       } catch (err: any) {
         console.error("Loader Error:", err);
@@ -82,9 +76,9 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
   return (
     <>
-      {/* Debug Overlay */}
+      {/* Debug Overlay: Only shows if loading or error */}
       {status && (
-        <div className="fixed top-20 left-4 z-50 bg-gray-900 text-white px-4 py-2 rounded shadow-lg text-xs font-mono border border-gray-700">
+        <div className="fixed top-20 left-4 z-50 bg-blue-900/90 text-white px-4 py-2 rounded shadow-lg text-xs font-mono border border-blue-500">
           STATUS: {status}
         </div>
       )}
@@ -94,7 +88,7 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
       {/* Container */}
       <div 
-        id="globe-container" // Giving it an ID helps scripts find it
+        id="globe-container" 
         className="w-full h-full"
         dangerouslySetInnerHTML={{ __html: html }} 
       />
