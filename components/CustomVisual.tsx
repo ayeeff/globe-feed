@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 
 interface CustomVisualProps {
@@ -10,48 +10,64 @@ interface CustomVisualProps {
 
 const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent }) => {
   const scriptRan = useRef(false);
+  const [debugMsg, setDebugMsg] = useState<string>("Initializing...");
 
   useEffect(() => {
-    // If we've already run this script, stop.
     if (scriptRan.current) return;
 
-    // Timer to check if global libraries are ready
+    setDebugMsg("Waiting for Globe.gl to load...");
+
+    // Timer to check if the library is ready
     const checkLibs = setInterval(() => {
-      // We look for 'Globe' and 'THREE' on the window object
-      if ((window as any).Globe && (window as any).THREE) {
+      // We ONLY check for Globe. The library bundles its own ThreeJS.
+      if ((window as any).Globe) {
         clearInterval(checkLibs);
+        setDebugMsg("Library found. Starting visualization...");
         
         try {
-          console.log("🚀 Executing Custom Script from Database...");
-          // Execute the code safely
+          // Execute the code from Supabase
           const dynamicFunction = new Function(scriptContent);
           dynamicFunction();
+          
           scriptRan.current = true;
-        } catch (err) {
-          console.error("❌ Custom Script Error:", err);
+          setDebugMsg(""); // Clear debug message on success
+        } catch (err: any) {
+          console.error("Script Error:", err);
+          setDebugMsg("Error: " + err.message);
         }
       }
-    }, 100); // Check every 100ms
+    }, 500); // Check every 0.5s
 
-    return () => clearInterval(checkLibs);
+    // Timeout after 10 seconds to stop checking
+    const timeout = setTimeout(() => {
+      clearInterval(checkLibs);
+      if (!scriptRan.current) setDebugMsg("Error: Timed out waiting for Globe.gl");
+    }, 10000);
+
+    return () => {
+      clearInterval(checkLibs);
+      clearTimeout(timeout);
+    };
   }, [scriptContent]);
 
   return (
     <>
-      {/* FIXED CDN LINKS:
-        We point to the specific .min.js files to avoid 'exports not defined' errors.
+      {/* FIX: LOAD ONLY GLOBE.GL
+         We removed the explicit 'three.js' script because globe.gl includes it.
+         strategy="lazyOnload" fixes the 'preloaded but not used' warning.
       */}
       <Script 
-        src="//unpkg.com/three@0.160.0/build/three.min.js" 
-        strategy="beforeInteractive" 
+        src="//unpkg.com/globe.gl" 
+        strategy="lazyOnload" 
+        onLoad={() => console.log("✅ Globe.gl Loaded")}
       />
-      <Script 
-        src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js" 
-        strategy="beforeInteractive" 
-        onLoad={() => {
-            console.log("✅ Globe.gl Loaded via CDN");
-        }}
-      />
+
+      {/* Debug Overlay: Only visible if something goes wrong or is loading */}
+      {debugMsg && (
+        <div className="fixed top-4 left-4 z-50 bg-red-900/90 text-white px-4 py-2 rounded shadow-lg text-sm font-mono border border-red-500">
+          Status: {debugMsg}
+        </div>
+      )}
 
       {/* Inject CSS */}
       <style dangerouslySetInnerHTML={{ __html: css }} />
