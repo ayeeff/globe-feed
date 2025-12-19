@@ -12,19 +12,19 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
   const [status, setStatus] = useState<string>("Initializing...");
 
   useEffect(() => {
+    // Prevent double-running
     if (scriptRan.current) return;
 
-    // Helper to manually load a script and wait for it
-    const loadScript = (src: string) => {
+    const loadScript = (src: string, id: string) => {
       return new Promise((resolve, reject) => {
-        // If already loaded, skip
-        if (document.querySelector(`script[src="${src}"]`)) {
-          resolve(true);
+        if (document.getElementById(id)) {
+          resolve(true); // Already loaded
           return;
         }
         const script = document.createElement('script');
         script.src = src;
-        script.async = true; 
+        script.id = id;
+        script.async = false; // Force synchronous-like execution order
         script.onload = () => resolve(true);
         script.onerror = () => reject(new Error(`Failed to load ${src}`));
         document.body.appendChild(script);
@@ -34,37 +34,44 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
     const init = async () => {
       try {
         setStatus("Loading 3D Engine...");
-        
-        // 1. Load Three.js (Specific Version r124 - Known stable with globe.gl)
-        if (!(window as any).THREE) {
-          await loadScript("//unpkg.com/three@0.124.0/build/three.min.js");
-        }
-        console.log("✅ THREE Ready");
 
-        // 2. Load Globe.gl (Specific Version)
+        // 1. Load Three.js (Version r129 - Stable Standard)
+        if (!(window as any).THREE) {
+          await loadScript("//unpkg.com/three@0.129.0/build/three.min.js", "three-lib");
+        }
+        
+        // 2. Explicitly ensure THREE is global (Fixes 'undefined' errors)
+        if ((window as any).THREE) {
+            console.log("✅ THREE Version:", (window as any).THREE.REVISION);
+        } else {
+            throw new Error("Three.js loaded but object is missing");
+        }
+
+        // 3. Load Globe.gl (Version 2.23.4 - Matches Three r129)
         setStatus("Loading Globe Library...");
         if (!(window as any).Globe) {
-          await loadScript("//unpkg.com/globe.gl@2.26.4/dist/globe.gl.min.js");
+          await loadScript("//unpkg.com/globe.gl@2.23.4/dist/globe.gl.min.js", "globe-lib");
         }
-        console.log("✅ Globe Ready");
 
-        // 3. Execute Your Code
+        // 4. Verify & Run
         setStatus("Starting Visualization...");
-        
-        // Small delay to ensure the library is fully parsed
         setTimeout(() => {
            if ((window as any).Globe) {
-              const dynamicFunction = new Function(scriptContent);
-              dynamicFunction();
+              console.log("✅ Globe Ready. Executing User Script...");
+              
+              // Wrap user script in a closure to protect variables
+              const runVisual = new Function(scriptContent);
+              runVisual();
+              
               scriptRan.current = true;
-              setStatus(""); // Success
+              setStatus(""); 
            } else {
-              throw new Error("Globe object missing after load");
+              setStatus("Error: Globe library failed to initialize.");
            }
-        }, 100);
+        }, 500); // Small buffer for parsing
 
       } catch (err: any) {
-        console.error(err);
+        console.error("Loader Error:", err);
         setStatus("Error: " + err.message);
       }
     };
@@ -77,16 +84,17 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
     <>
       {/* Debug Overlay */}
       {status && (
-        <div className="fixed top-20 left-4 z-50 bg-black/80 text-yellow-400 px-4 py-2 rounded border border-yellow-800 font-mono text-xs shadow-xl backdrop-blur-md">
-          [System]: {status}
+        <div className="fixed top-20 left-4 z-50 bg-gray-900 text-white px-4 py-2 rounded shadow-lg text-xs font-mono border border-gray-700">
+          STATUS: {status}
         </div>
       )}
 
-      {/* Inject CSS */}
+      {/* Styles */}
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
-      {/* Inject HTML */}
+      {/* Container */}
       <div 
+        id="globe-container" // Giving it an ID helps scripts find it
         className="w-full h-full"
         dangerouslySetInnerHTML={{ __html: html }} 
       />
