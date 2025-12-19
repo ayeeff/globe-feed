@@ -34,42 +34,42 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
       try {
         setStatus("Loading 3D Engine...");
 
-        // 1. Load Three.js
+        // 1. Load Three.js and expose to window
         if (!(window as any).THREE) {
-          await loadScript("//unpkg.com/three@0.160.0/build/three.min.js", "three-lib");
+          // Import Three.js dynamically to avoid SSR issues
+          const THREE = await import('three');
+          (window as any).THREE = THREE;
+          console.log("✅ THREE Ready (from node_modules)");
         }
-        console.log("✅ THREE Ready");
 
-        // 2. Load Globe.gl
+        // 2. Load Globe.gl (it will use window.THREE)
         setStatus("Loading Globe Library...");
         if (!(window as any).Globe) {
           await loadScript("//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js", "globe-lib");
         }
         console.log("✅ Globe Ready");
 
-        // 3. Wait for DOM and execute user script
+        // 3. Execute user script with proper timing
         setStatus("Starting Visualization...");
         
-        // Use requestAnimationFrame to ensure DOM is painted
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            if ((window as any).Globe) {
-              try {
-                // Execute the code stored in Supabase
-                const runVisual = new Function(scriptContent);
-                runVisual();
-                
-                scriptRan.current = true;
-                setStatus(""); // Clear Debug Message
-              } catch (execError: any) {
-                console.error("Script Execution Error:", execError);
-                setStatus("Error executing script: " + execError.message);
-              }
-            } else {
-              setStatus("Error: Globe symbol missing.");
-            }
-          }, 300); // Increased delay to ensure everything is ready
-        });
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        if ((window as any).Globe) {
+          try {
+            const runVisual = new Function(scriptContent);
+            runVisual();
+            
+            scriptRan.current = true;
+            setStatus("");
+          } catch (execError: any) {
+            console.error("Script Execution Error:", execError);
+            setStatus("Script Error: " + execError.message);
+          }
+        } else {
+          setStatus("Error: Globe symbol missing.");
+        }
 
       } catch (err: any) {
         console.error("Loader Error:", err);
@@ -79,12 +79,18 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
     init();
 
-    // Cleanup function
     return () => {
-      // Clean up any globe instances
       const container = document.getElementById('globe-container');
       if (container) {
-        container.innerHTML = html; // Reset to original HTML
+        // Clear any WebGL contexts
+        const canvas = container.querySelector('canvas');
+        if (canvas) {
+          const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
+          if (gl && (gl as any).getExtension) {
+            (gl as any).getExtension('WEBGL_lose_context')?.loseContext();
+          }
+        }
+        container.innerHTML = html;
       }
     };
 
@@ -92,17 +98,14 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
   return (
     <>
-      {/* Debug Overlay */}
       {status && (
         <div className="fixed top-20 left-4 z-50 bg-blue-900/90 text-white px-4 py-2 rounded shadow-lg text-xs font-mono border border-blue-500">
           STATUS: {status}
         </div>
       )}
 
-      {/* Styles */}
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
-      {/* Container */}
       <div 
         id="globe-container" 
         className="w-full h-full"
