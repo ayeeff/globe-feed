@@ -9,6 +9,7 @@ interface CustomVisualProps {
 
 const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent }) => {
   const scriptRan = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<string>("Initializing...");
 
   useEffect(() => {
@@ -16,7 +17,8 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
     const loadScript = (src: string, id: string) => {
       return new Promise((resolve, reject) => {
-        if (document.getElementById(id)) {
+        const existing = document.getElementById(id);
+        if (existing) {
           resolve(true); 
           return;
         }
@@ -32,81 +34,96 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
     const init = async () => {
       try {
-        setStatus("Loading 3D Engine...");
-
-        // 1. Load Three.js and expose to window
-        if (!(window as any).THREE) {
-          // Import Three.js dynamically to avoid SSR issues
-          const THREE = await import('three');
-          (window as any).THREE = THREE;
-          console.log("✅ THREE Ready (from node_modules)");
-        }
-
-        // 2. Load Globe.gl (it will use window.THREE)
         setStatus("Loading Globe Library...");
+
+        // Load Globe.gl directly (it includes Three.js internally)
         if (!(window as any).Globe) {
-          await loadScript("//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js", "globe-lib");
+          await loadScript("//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js", "globe-lib");
         }
         console.log("✅ Globe Ready");
 
-        // 3. Execute user script with proper timing
-        setStatus("Starting Visualization...");
+        setStatus("Preparing Container...");
         
+        // Wait for DOM to be ready
         await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => setTimeout(resolve, 100));
         
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Ensure container exists
+        const container = document.getElementById('globe-container');
+        if (!container) {
+          setStatus("Error: globe-container not found");
+          return;
+        }
+
+        setStatus("Initializing Visualization...");
         
+        // Execute user script
         if ((window as any).Globe) {
           try {
-            const runVisual = new Function(scriptContent);
-            runVisual();
-            
-            scriptRan.current = true;
-            setStatus("");
-          } catch (execError: any) {
-            console.error("Script Execution Error:", execError);
-            setStatus("Script Error: " + execError.message);
+            // Wrap in additional delay to ensure Globe is fully ready
+            setTimeout(() => {
+              try {
+                const runVisual = new Function(scriptContent);
+                runVisual();
+                
+                scriptRan.current = true;
+                setStatus("");
+                console.log("✅ Visualization Started");
+              } catch (execError: any) {
+                console.error("Script Execution Error:", execError);
+                setStatus("Script Error: " + execError.message);
+              }
+            }, 500);
+          } catch (err: any) {
+            console.error("Inner Error:", err);
+            setStatus("Error: " + err.message);
           }
         } else {
-          setStatus("Error: Globe symbol missing.");
+          setStatus("Error: Globe symbol not available");
         }
 
       } catch (err: any) {
         console.error("Loader Error:", err);
-        setStatus("Error: " + err.message);
+        setStatus("Load Error: " + err.message);
       }
     };
 
     init();
 
     return () => {
+      console.log("🧹 Cleaning up CustomVisual");
       const container = document.getElementById('globe-container');
       if (container) {
         // Clear any WebGL contexts
         const canvas = container.querySelector('canvas');
         if (canvas) {
           const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
-          if (gl && (gl as any).getExtension) {
-            (gl as any).getExtension('WEBGL_lose_context')?.loseContext();
+          if (gl) {
+            const loseContext = (gl as any).getExtension('WEBGL_lose_context');
+            if (loseContext) loseContext.loseContext();
           }
         }
-        container.innerHTML = html;
+        // Clear container
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
       }
     };
 
-  }, [scriptContent, html]);
+  }, [scriptContent]);
 
   return (
     <>
       {status && (
         <div className="fixed top-20 left-4 z-50 bg-blue-900/90 text-white px-4 py-2 rounded shadow-lg text-xs font-mono border border-blue-500">
-          STATUS: {status}
+          {status}
         </div>
       )}
 
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
       <div 
+        ref={containerRef}
         id="globe-container" 
         className="w-full h-full"
         dangerouslySetInnerHTML={{ __html: html }} 
