@@ -1,3 +1,4 @@
+// components/CustomVisual.tsx - IMPROVED VERSION
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -9,13 +10,16 @@ interface CustomVisualProps {
 }
 
 const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, isActive = true }) => {
-  const scriptRan = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const globeInstanceRef = useRef<any>(null);
+  const cleanupFnRef = useRef<(() => void) | null>(null);
   const [status, setStatus] = useState<string>("Initializing...");
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (scriptRan.current) return;
+    // Prevent double initialization
+    if (mountedRef.current) return;
+    mountedRef.current = true;
 
     const loadScript = (src: string, id: string) => {
       return new Promise((resolve, reject) => {
@@ -51,47 +55,79 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
         setStatus("Initializing Visualization...");
         
         if ((window as any).Globe) {
-          try {
-            setTimeout(() => {
-              try {
-                // Create a wrapper to capture the globe instance
-                const originalScript = scriptContent;
-                const wrappedScript = `
-                  (function() {
-                    const originalGlobe = window.Globe;
-                    let capturedInstance = null;
-                    
-                    // Intercept Globe creation
-                    window.Globe = function(...args) {
-                      const instance = originalGlobe(...args);
-                      capturedInstance = instance;
-                      return instance;
-                    };
-                    
-                    // Run original script
-                    ${originalScript}
-                    
-                    // Restore and return
-                    window.Globe = originalGlobe;
-                    return capturedInstance;
-                  })();
-                `;
+          setTimeout(() => {
+            try {
+              // CRITICAL: Store cleanup function
+              cleanupFnRef.current = () => {
+                console.log("🧹 Executing stored cleanup for visualization");
                 
-                const runVisual = new Function(wrappedScript);
-                globeInstanceRef.current = runVisual();
+                // Clean up globe instance
+                if (globeInstanceRef.current) {
+                  try {
+                    const controls = globeInstanceRef.current.controls();
+                    if (controls) {
+                      controls.autoRotate = false;
+                      controls.dispose();
+                    }
+                  } catch (e) {
+                    console.error("Error disposing controls:", e);
+                  }
+                  globeInstanceRef.current = null;
+                }
                 
-                scriptRan.current = true;
-                setStatus("");
-                console.log("✅ Visualization Started");
-              } catch (execError: any) {
-                console.error("Script Execution Error:", execError);
-                setStatus("Script Error: " + execError.message);
-              }
-            }, 500);
-          } catch (err: any) {
-            console.error("Inner Error:", err);
-            setStatus("Error: " + err.message);
-          }
+                // Clean up DOM containers
+                const containers = ['globeViz', 'globe-container'];
+                containers.forEach(id => {
+                  const container = document.getElementById(id);
+                  if (container) {
+                    const canvas = container.querySelector('canvas');
+                    if (canvas) {
+                      const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
+                      if (gl) {
+                        const loseContext = (gl as any).getExtension('WEBGL_lose_context');
+                        if (loseContext) loseContext.loseContext();
+                      }
+                    }
+                    // Remove all children
+                    while (container.firstChild) {
+                      container.removeChild(container.firstChild);
+                    }
+                  }
+                });
+              };
+
+              // Wrap script to capture globe instance
+              const wrappedScript = `
+                (function() {
+                  const originalGlobe = window.Globe;
+                  let capturedInstance = null;
+                  
+                  // Intercept Globe creation
+                  window.Globe = function(...args) {
+                    const instance = originalGlobe(...args);
+                    capturedInstance = instance;
+                    return instance;
+                  };
+                  
+                  // Run original script
+                  ${scriptContent}
+                  
+                  // Restore and return
+                  window.Globe = originalGlobe;
+                  return capturedInstance;
+                })();
+              `;
+              
+              const runVisual = new Function(wrappedScript);
+              globeInstanceRef.current = runVisual();
+              
+              setStatus("");
+              console.log("✅ Visualization Started");
+            } catch (execError: any) {
+              console.error("Script Execution Error:", execError);
+              setStatus("Script Error: " + execError.message);
+            }
+          }, 500);
         } else {
           setStatus("Error: Globe symbol not available");
         }
@@ -104,38 +140,18 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
 
     init();
 
+    // CLEANUP on unmount
     return () => {
-      console.log("🧹 Cleaning up CustomVisual");
+      console.log("🧹 CustomVisual unmounting - cleaning up");
+      mountedRef.current = false;
       
-      // Stop globe animations
-      if (globeInstanceRef.current) {
-        try {
-          const controls = globeInstanceRef.current.controls();
-          if (controls) {
-            controls.autoRotate = false;
-          }
-        } catch (e) {
-          console.error("Error stopping animations:", e);
-        }
-      }
-      
-      const container = document.getElementById('globeViz') || document.getElementById('globe-container');
-      if (container) {
-        const canvas = container.querySelector('canvas');
-        if (canvas) {
-          const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
-          if (gl) {
-            const loseContext = (gl as any).getExtension('WEBGL_lose_context');
-            if (loseContext) loseContext.loseContext();
-          }
-        }
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
+      if (cleanupFnRef.current) {
+        cleanupFnRef.current();
+        cleanupFnRef.current = null;
       }
     };
 
-  }, [scriptContent]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Pause/resume globe rotation based on active state
   useEffect(() => {
