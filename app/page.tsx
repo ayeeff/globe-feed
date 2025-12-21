@@ -1,4 +1,4 @@
-// app/page.tsx - Restored working feed (no redirect loops)
+// app/page.tsx
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -181,8 +181,9 @@ function FeedContent() {
 
             {index === currentIndex && (
               <>
-                <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none">
-                  <div className="p-6 pb-8">
+                {/* Title and Description - Moved to align Right so it doesn't clash with buttons on Left */}
+                <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none flex flex-col items-end">
+                  <div className="p-6 pb-8 text-right max-w-2xl">
                     <h2 className="text-white text-xl font-bold mb-2 drop-shadow-lg pointer-events-auto">
                       {post.title}
                     </h2>
@@ -194,7 +195,8 @@ function FeedContent() {
                   </div>
                 </div>
 
-                <div className="absolute right-20 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
+                {/* Sidebar Buttons - MOVED TO LEFT to avoid covering data tables on the right */}
+                <div className="absolute left-5 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
                   <button onClick={handleLike} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
                       <span className="text-2xl">❤️</span>
