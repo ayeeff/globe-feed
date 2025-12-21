@@ -1,6 +1,6 @@
 // app/page.tsx - Restored working feed (no redirect loops)
 "use client";
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import CustomVisual from '../components/CustomVisual';
@@ -295,5 +295,16 @@ function FeedContent() {
 }
 
 export default function Home() {
-  return <FeedContent />;
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <FeedContent />
+    </Suspense>
+  );
 }
