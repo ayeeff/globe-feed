@@ -83,6 +83,33 @@ function FeedContent() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [currentIndex, posts.length, loadedIndexes]);
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isCommentsOpen) return; // Don't navigate when comments are open
+      
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateToPost(currentIndex + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateToPost(currentIndex - 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, posts.length, isCommentsOpen]);
+
+  const navigateToPost = (index: number) => {
+    if (index < 0 || index >= posts.length) return;
+    
+    containerRef.current?.children[index]?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
+
   const handleShare = async () => {
     const url = `${window.location.origin}/?post=${posts[currentIndex].slug}`;
     
@@ -213,13 +240,29 @@ function FeedContent() {
 
                 {/* Scroll indicator */}
                 {index < posts.length - 1 && (
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-[20000] pointer-events-none">
-                    <div className="animate-bounce">
-                      <svg className="w-6 h-6 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  <button
+                    onClick={() => navigateToPost(index + 1)}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group"
+                  >
+                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
+                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
-                  </div>
+                  </button>
+                )}
+                
+                {index > 0 && (
+                  <button
+                    onClick={() => navigateToPost(index - 1)}
+                    className="absolute left-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group"
+                  >
+                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
+                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </div>
+                  </button>
                 )}
               </>
             )}
@@ -239,6 +282,20 @@ function FeedContent() {
           }}
         />
       )}
+      
+      {/* Pagination Dots */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
+        {posts.map((_, index) => (
+          <div
+            key={index}
+            className={`h-2 rounded-full transition-all ${
+              index === currentIndex 
+                ? 'w-8 bg-white' 
+                : 'w-2 bg-white/30'
+            }`}
+          />
+        ))}
+      </div>
     </>
   );
 }
