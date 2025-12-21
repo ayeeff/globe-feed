@@ -1,8 +1,9 @@
-// app/page.tsx - Grid home as default (no redirect)
+// app/page.tsx - Clean YouTube-style dashboard
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import CommentPanel from '../components/CommentPanel';
 
 interface Post {
   id: string;
@@ -19,6 +20,8 @@ interface Post {
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -44,7 +47,46 @@ export default function HomePage() {
   }, []);
 
   const handleCardClick = (slug: string) => {
-    router.push(`/feed?post=${slug}`);
+    window.location.href = `/embed/${slug}`;
+  };
+
+  const handleLike = async (post: Post, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { error } = await supabase
+      .from('posts')
+      .update({ likes_count: (post.likes_count || 0) + 1 })
+      .eq('id', post.id);
+
+    if (!error) {
+      setPosts(prev => prev.map(p => 
+        p.id === post.id ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
+      ));
+    }
+  };
+
+  const handleComment = (post: Post, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedPost(post);
+    setIsCommentsOpen(true);
+  };
+
+  const handleShare = async (post: Post, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/embed/${post.slug}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: post.title,
+          url: url,
+        });
+      } catch (err) {
+        console.log('Share cancelled');
+      }
+    } else {
+      navigator.clipboard.writeText(url);
+      alert('Link copied to clipboard!');
+    }
   };
 
   if (loading) {
@@ -65,7 +107,6 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {/* Globe Icon */}
               <img 
                 src="https://hqwumhmscsqaytswhhue.supabase.co/storage/v1/object/public/globe-thumbnails/remittance-flow-icon.png" 
                 alt="Globe"
@@ -84,12 +125,6 @@ export default function HomePage() {
               >
                 🗺️ Sitemap
               </a>
-              <button
-                onClick={() => router.push('/feed')}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition flex items-center gap-2"
-              >
-                🎬 Feed View
-              </button>
             </div>
           </div>
         </div>
@@ -141,13 +176,15 @@ export default function HomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              onClick={() => handleCardClick(post.slug)}
-              className="group cursor-pointer"
+              className="group"
             >
               {/* Card */}
-              <div className="bg-white/5 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10 hover:border-purple-500/50 transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20">
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10 hover:border-purple-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/20">
                 {/* Thumbnail */}
-                <div className="relative aspect-video bg-gradient-to-br from-purple-900/50 to-blue-900/50 overflow-hidden">
+                <div 
+                  onClick={() => handleCardClick(post.slug)}
+                  className="relative aspect-video bg-gradient-to-br from-purple-900/50 to-blue-900/50 overflow-hidden cursor-pointer"
+                >
                   {post.thumbnail_url ? (
                     <img
                       src={post.thumbnail_url}
@@ -181,7 +218,10 @@ export default function HomePage() {
                 {/* Content */}
                 <div className="p-4">
                   {/* Title */}
-                  <h3 className="text-white font-semibold text-lg mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors">
+                  <h3 
+                    onClick={() => handleCardClick(post.slug)}
+                    className="text-white font-semibold text-lg mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors cursor-pointer"
+                  >
                     {post.title}
                   </h3>
 
@@ -191,15 +231,7 @@ export default function HomePage() {
                   </p>
 
                   {/* Meta Info */}
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1">
-                        ❤️ {post.likes_count || 0}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        💬 {post.comments_count || 0}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
                     <span>
                       {new Date(post.created_at).toLocaleDateString('en-US', { 
                         month: 'short', 
@@ -207,6 +239,33 @@ export default function HomePage() {
                         year: 'numeric'
                       })}
                     </span>
+                  </div>
+
+                  {/* Action Buttons - At Bottom */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-white/10">
+                    <button 
+                      onClick={(e) => handleLike(post, e)}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-white text-sm"
+                    >
+                      <span>❤️</span>
+                      <span>{post.likes_count || 0}</span>
+                    </button>
+                    
+                    <button 
+                      onClick={(e) => handleComment(post, e)}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-white text-sm"
+                    >
+                      <span>💬</span>
+                      <span>{post.comments_count || 0}</span>
+                    </button>
+                    
+                    <button 
+                      onClick={(e) => handleShare(post, e)}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-white text-sm"
+                    >
+                      <span>🔗</span>
+                      <span className="text-xs">Share</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -248,6 +307,19 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Comment Panel */}
+      {isCommentsOpen && selectedPost && (
+        <CommentPanel
+          postId={selectedPost.id}
+          onClose={() => setIsCommentsOpen(false)}
+          onCommentAdded={() => {
+            setPosts(prev => prev.map(p => 
+              p.id === selectedPost.id ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p
+            ));
+          }}
+        />
+      )}
     </div>
   );
 }
