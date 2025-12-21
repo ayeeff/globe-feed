@@ -230,7 +230,7 @@ function FeedContent() {
                     <span className="text-white text-xs font-semibold drop-shadow-lg">
                       Home
                     </span>
-                  </button>
+                  </a>
 
                   <a href="/sitemap-tree" className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
