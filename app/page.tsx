@@ -6,22 +6,87 @@ import { supabase } from '../lib/supabaseClient';
 import CustomVisual from '../components/CustomVisual';
 import CommentPanel from '../components/CommentPanel';
 
+// --- Embed Modal Component ---
+function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const embedUrl = typeof window !== 'undefined' ? `${window.location.origin}/embed/${post.slug}` : '';
+  
+  // YouTube style fixed dimensions (800x550)
+  const embedCode = `<iframe width="800" height="550" src="${embedUrl}" title="${post.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(embedCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div 
+        className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative" 
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h3 className="text-white text-xl font-bold mb-4">Embed Visualization</h3>
+        
+        <div className="mb-4">
+          <label className="block text-white/60 text-sm mb-2">Embed Code</label>
+          <div className="relative">
+            <textarea 
+              readOnly 
+              value={embedCode}
+              className="w-full h-32 bg-black/50 border border-white/10 rounded-lg p-3 text-white/80 text-sm font-mono resize-none focus:outline-none focus:border-purple-500 transition"
+              onClick={(e) => e.currentTarget.select()}
+            />
+            <button 
+              onClick={handleCopy}
+              className="absolute bottom-3 right-3 px-3 py-1.5 bg-white/10 hover:bg-purple-600 text-white text-xs rounded-md transition flex items-center gap-1.5 backdrop-blur-md"
+            >
+              {copied ? (
+                <>
+                  <span>✓</span> Copied
+                </>
+              ) : (
+                <>
+                  <span>📋</span> Copy Code
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-white/40">
+          <span className="w-2 h-2 rounded-full bg-green-500"></span>
+          <span>Fixed Size (800x550)</span>
+          <span className="mx-1">•</span>
+          <span>Interactive</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeedContent() {
   const [posts, setPosts] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isEmbedOpen, setIsEmbedOpen] = useState(false);
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
   
   // REFS
   const containerRef = useRef<HTMLDivElement>(null);
-  const isProgrammaticScroll = useRef(false); // New: Prevents scroll fighting
-  const hasInitialLoadHappened = useRef(false); // New: Prevents double fetching
+  const isProgrammaticScroll = useRef(false); // Prevents scroll listener from fighting navigation
+  const hasInitialLoadHappened = useRef(false); // Prevents double fetching
   
   const searchParams = useSearchParams();
 
   // 1. Fetch Posts & Handle Initial Deep Link
   useEffect(() => {
-    // Prevent this from running multiple times when URL changes
     if (hasInitialLoadHappened.current) return;
 
     async function fetchPosts() {
@@ -67,7 +132,6 @@ function FeedContent() {
       }
     }
     fetchPosts();
-    // Intentionally passing empty dependency array to run only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
@@ -114,7 +178,7 @@ function FeedContent() {
   // 4. Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCommentsOpen) return;
+      if (isCommentsOpen || isEmbedOpen) return;
       
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -127,7 +191,7 @@ function FeedContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, posts.length, isCommentsOpen]);
+  }, [currentIndex, posts.length, isCommentsOpen, isEmbedOpen]);
 
   const navigateToPost = (index: number) => {
     if (index < 0 || index >= posts.length) return;
@@ -236,7 +300,7 @@ function FeedContent() {
                 </div>
 
                 {/* Bottom Horizontal Button Bar */}
-                <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-8 pointer-events-auto px-4">
+                <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-6 pointer-events-auto px-4">
                   <button onClick={handleLike} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">❤️</span>
@@ -261,6 +325,16 @@ function FeedContent() {
                     </div>
                     <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       Share
+                    </span>
+                  </button>
+
+                  {/* EMBED BUTTON */}
+                  <button onClick={() => setIsEmbedOpen(true)} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
+                      <span className="text-2xl">code</span>
+                    </div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
+                      Embed
                     </span>
                   </button>
 
@@ -309,6 +383,7 @@ function FeedContent() {
         ))}
       </main>
 
+      {/* MODALS */}
       {isCommentsOpen && posts[currentIndex] && (
         <CommentPanel
           postId={posts[currentIndex].id}
@@ -318,6 +393,14 @@ function FeedContent() {
               i === currentIndex ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p
             ));
           }}
+        />
+      )}
+
+      {/* Embed Modal */}
+      {isEmbedOpen && posts[currentIndex] && (
+        <EmbedModal 
+          post={posts[currentIndex]} 
+          onClose={() => setIsEmbedOpen(false)} 
         />
       )}
       
