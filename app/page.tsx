@@ -1,3 +1,4 @@
+// app/page.tsx - Updated with better visualization cleanup
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -31,7 +32,6 @@ function FeedContent() {
       if (data) {
         setPosts(data);
         
-        // Check if there's a slug in URL
         const slug = searchParams.get('post');
         if (slug) {
           const index = data.findIndex(p => p.slug === slug);
@@ -48,7 +48,6 @@ function FeedContent() {
     fetchPosts();
   }, [searchParams]);
 
-  // Update URL when scrolling to new post
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
@@ -58,7 +57,6 @@ function FeedContent() {
     }
   }, [currentIndex, posts, router]);
 
-  // Scroll detection with lazy loading
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -71,7 +69,6 @@ function FeedContent() {
       if (newIndex !== currentIndex && newIndex >= 0 && newIndex < posts.length) {
         setCurrentIndex(newIndex);
         
-        // Load current, previous, and next visualizations
         const indexesToLoad = new Set(loadedIndexes);
         indexesToLoad.add(newIndex);
         if (newIndex > 0) indexesToLoad.add(newIndex - 1);
@@ -84,10 +81,9 @@ function FeedContent() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [currentIndex, posts.length, loadedIndexes]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCommentsOpen) return; // Don't navigate when comments are open
+      if (isCommentsOpen) return;
       
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -165,13 +161,16 @@ function FeedContent() {
             key={post.id} 
             className="h-screen w-full snap-start snap-always relative"
           >
-            {loadedIndexes.has(index) ? (
+            {loadedIndexes.has(index) && index === currentIndex ? (
               <CustomVisual 
+                key={post.id}
                 css={post.custom_css} 
                 html={post.custom_html} 
                 scriptContent={post.custom_script}
-                isActive={index === currentIndex}
+                isActive={true}
               />
+            ) : loadedIndexes.has(index) ? (
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
                 <div className="text-center text-white/50">
@@ -181,7 +180,6 @@ function FeedContent() {
               </div>
             )}
 
-            {/* Overlay UI - Only show on active slide */}
             {index === currentIndex && (
               <>
                 <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none">
@@ -237,9 +235,22 @@ function FeedContent() {
                       Share
                     </span>
                   </button>
+
+                  {/* NEW: Sitemap */}
+                  <a 
+                    href="/sitemap-tree"
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                      <span className="text-2xl">🗺️</span>
+                    </div>
+                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                      Map
+                    </span>
+                  </a>
                 </div>
 
-                {/* Scroll indicator */}
+                {/* Navigation arrows */}
                 {index < posts.length - 1 && (
                   <button
                     onClick={() => navigateToPost(index + 1)}
@@ -271,7 +282,6 @@ function FeedContent() {
         ))}
       </main>
 
-      {/* Comment Panel */}
       {isCommentsOpen && posts[currentIndex] && (
         <CommentPanel
           postId={posts[currentIndex].id}
