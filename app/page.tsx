@@ -11,10 +11,19 @@ function FeedContent() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
+  
+  // REFS
   const containerRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScroll = useRef(false); // New: Prevents scroll fighting
+  const hasInitialLoadHappened = useRef(false); // New: Prevents double fetching
+  
   const searchParams = useSearchParams();
 
+  // 1. Fetch Posts & Handle Initial Deep Link
   useEffect(() => {
+    // Prevent this from running multiple times when URL changes
+    if (hasInitialLoadHappened.current) return;
+
     async function fetchPosts() {
       const { data, error } = await supabase
         .from('posts')
@@ -29,38 +38,60 @@ function FeedContent() {
       
       if (data) {
         setPosts(data);
+        hasInitialLoadHappened.current = true;
         
+        // Handle Deep Linking (Only once on initial load)
         const slug = searchParams.get('post');
         if (slug) {
           const index = data.findIndex(p => p.slug === slug);
           if (index !== -1) {
+            // Lock scrolling so the scroll listener doesn't reset us to 0
+            isProgrammaticScroll.current = true;
+            
             setCurrentIndex(index);
             setLoadedIndexes(new Set([index]));
+            
+            // Force scroll after a slight delay to ensure DOM is ready
             setTimeout(() => {
-              containerRef.current?.children[index]?.scrollIntoView({ behavior: 'auto' });
+              if (containerRef.current?.children[index]) {
+                containerRef.current.children[index].scrollIntoView({ behavior: 'auto' });
+                
+                // Unlock scrolling after animation should be done
+                setTimeout(() => {
+                  isProgrammaticScroll.current = false;
+                }, 500);
+              }
             }, 100);
           }
         }
       }
     }
     fetchPosts();
-  }, [searchParams]);
+    // Intentionally passing empty dependency array to run only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
+  // 2. Update URL when user swipes (BUT don't trigger re-fetches)
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
       if (slug) {
+        // Use replaceState directly to avoid triggering Next.js navigation events if possible
         const newUrl = `/?post=${slug}`;
-        window.history.replaceState({}, '', newUrl);
+        window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
       }
     }
   }, [currentIndex, posts]);
 
+  // 3. Handle Scroll (Swipe Detection)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
+      // If we are programmatically scrolling (jumping to a link), ignore scroll events
+      if (isProgrammaticScroll.current) return;
+
       const scrollTop = container.scrollTop;
       const windowHeight = window.innerHeight;
       const newIndex = Math.round(scrollTop / windowHeight);
@@ -80,6 +111,7 @@ function FeedContent() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [currentIndex, posts.length, loadedIndexes]);
 
+  // 4. Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isCommentsOpen) return;
@@ -100,10 +132,18 @@ function FeedContent() {
   const navigateToPost = (index: number) => {
     if (index < 0 || index >= posts.length) return;
     
+    // Lock scroll listener during smooth scroll
+    isProgrammaticScroll.current = true;
+    
     containerRef.current?.children[index]?.scrollIntoView({ 
       behavior: 'smooth',
       block: 'start'
     });
+
+    // Unlock after smooth scroll (approx 500ms)
+    setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 500);
   };
 
   const handleShare = async () => {
@@ -281,7 +321,7 @@ function FeedContent() {
         />
       )}
       
-      {/* Scroll indicator dots - tucked at the very bottom */}
+      {/* Scroll indicator dots */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
         {posts.map((_, index) => (
           <div
