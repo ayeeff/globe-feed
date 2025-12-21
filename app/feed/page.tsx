@@ -173,7 +173,11 @@ function FeedContent() {
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
                 <div className="text-center text-white/50">
-                  <div className="text-4xl mb-2">🌍</div>
+                  <img 
+                    src="https://hqwumhmscsqaytswhhue.supabase.co/storage/v1/object/public/globe-thumbnails/remittance-flow-icon.png" 
+                    alt="Globe"
+                    className="w-16 h-16 object-contain mx-auto mb-2 opacity-50"
+                  />
                   <p className="text-sm">Swipe to load</p>
                 </div>
               </div>
@@ -194,7 +198,8 @@ function FeedContent() {
                   </div>
                 </div>
 
-                <div className="absolute right-4 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
+                {/* MOVED FURTHER LEFT - from right-4 to right-20 to avoid covering content */}
+                <div className="absolute right-20 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
                   <button onClick={handleLike} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
                       <span className="text-2xl">❤️</span>
@@ -222,14 +227,14 @@ function FeedContent() {
                     </span>
                   </button>
 
-                  <a href="/home" className="flex flex-col items-center gap-1 group">
+                  <a href="/" className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
                       <span className="text-2xl">🏠</span>
                     </div>
                     <span className="text-white text-xs font-semibold drop-shadow-lg">
                       Grid
                     </span>
-                  </a>
+                  </button>
 
                   <a href="/sitemap-tree" className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
@@ -238,7 +243,7 @@ function FeedContent() {
                     <span className="text-white text-xs font-semibold drop-shadow-lg">
                       Map
                     </span>
-                  </a>
+                  </button>
                 </div>
 
                 {index < posts.length - 1 && (
