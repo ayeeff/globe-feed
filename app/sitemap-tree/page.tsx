@@ -1,20 +1,22 @@
-// app/page.tsx - Updated with Sitemap Button
+// app/sitemap-tree/page.tsx
 "use client";
-import { useEffect, useState, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '../lib/supabaseClient';
-import CustomVisual from '../components/CustomVisual';
-import CommentPanel from '../components/CommentPanel';
+import { useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
 
-function FeedContent() {
-  const [posts, setPosts] = useState<any[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
-  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
-  const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
-  const containerRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+interface Post {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  created_at: string;
+  likes_count: number;
+  comments_count: number;
+}
+
+export default function SitemapTreePage() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   useEffect(() => {
     async function fetchPosts() {
@@ -26,299 +28,216 @@ function FeedContent() {
 
       if (error) {
         console.error("Error fetching posts:", error);
+        setLoading(false);
         return;
       }
       
       if (data) {
         setPosts(data);
-        
-        const slug = searchParams.get('post');
-        if (slug) {
-          const index = data.findIndex(p => p.slug === slug);
-          if (index !== -1) {
-            setCurrentIndex(index);
-            setLoadedIndexes(new Set([index]));
-            setTimeout(() => {
-              containerRef.current?.children[index]?.scrollIntoView({ behavior: 'auto' });
-            }, 100);
-          }
-        }
+        setLoading(false);
       }
     }
     fetchPosts();
-  }, [searchParams]);
+  }, []);
 
-  useEffect(() => {
-    if (posts.length > 0 && posts[currentIndex]) {
-      const slug = posts[currentIndex].slug;
-      if (slug) {
-        router.replace(`/?post=${slug}`, { scroll: false });
-      }
-    }
-  }, [currentIndex, posts, router]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const scrollTop = container.scrollTop;
-      const windowHeight = window.innerHeight;
-      const newIndex = Math.round(scrollTop / windowHeight);
-      
-      if (newIndex !== currentIndex && newIndex >= 0 && newIndex < posts.length) {
-        setCurrentIndex(newIndex);
-        
-        const indexesToLoad = new Set(loadedIndexes);
-        indexesToLoad.add(newIndex);
-        if (newIndex > 0) indexesToLoad.add(newIndex - 1);
-        if (newIndex < posts.length - 1) indexesToLoad.add(newIndex + 1);
-        setLoadedIndexes(indexesToLoad);
-      }
-    };
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [currentIndex, posts.length, loadedIndexes]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCommentsOpen) return;
-      
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        navigateToPost(currentIndex + 1);
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        navigateToPost(currentIndex - 1);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, posts.length, isCommentsOpen]);
-
-  const navigateToPost = (index: number) => {
-    if (index < 0 || index >= posts.length) return;
-    
-    containerRef.current?.children[index]?.scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
-    });
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('URL copied to clipboard!');
   };
 
-  const handleShare = async () => {
-    const url = `${window.location.origin}/?post=${posts[currentIndex].slug}`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: posts[currentIndex].title,
-          url: url,
-        });
-      } catch (err) {
-        console.log('Share cancelled');
-      }
-    } else {
-      navigator.clipboard.writeText(url);
-      alert('Link copied to clipboard!');
-    }
-  };
-
-  const handleLike = async () => {
-    const post = posts[currentIndex];
-    const { error } = await supabase
-      .from('posts')
-      .update({ likes_count: (post.likes_count || 0) + 1 })
-      .eq('id', post.id);
-
-    if (!error) {
-      setPosts(prev => prev.map((p, i) => 
-        i === currentIndex ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
-      ));
-    }
-  };
-
-  if (posts.length === 0) {
+  if (loading) {
     return (
-      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
-        <div className="text-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Loading visualizations...</p>
+          <p>Loading sitemap...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <>
-      <main 
-        ref={containerRef}
-        className="h-screen w-full bg-black overflow-y-scroll snap-y snap-mandatory scroll-smooth"
-      >
-        {posts.map((post, index) => (
-          <div 
-            key={post.id} 
-            className="h-screen w-full snap-start snap-always relative"
-          >
-            {loadedIndexes.has(index) ? (
-              <CustomVisual 
-                css={post.custom_css} 
-                html={post.custom_html} 
-                scriptContent={post.custom_script}
-                isActive={index === currentIndex}
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
-                <div className="text-center text-white/50">
-                  <div className="text-4xl mb-2">🌍</div>
-                  <p className="text-sm">Swipe to load</p>
-                </div>
-              </div>
-            )}
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-12 text-center">
+          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+            🌍 Globe.GL Sitemap
+          </h1>
+          <p className="text-gray-300 text-lg mb-6">
+            Interactive 3D Globe Visualizations Directory
+          </p>
+          <div className="flex gap-4 justify-center">
+            <a 
+              href={`${baseUrl}/sitemap.xml`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition flex items-center gap-2"
+            >
+              📄 View XML Sitemap
+            </a>
+            <a 
+              href="/"
+              className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold transition flex items-center gap-2"
+            >
+              🏠 Back to Home
+            </a>
+          </div>
+        </div>
 
-            {index === currentIndex && (
-              <>
-                <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none">
-                  <div className="p-6 pb-8">
-                    <h2 className="text-white text-xl font-bold mb-2 drop-shadow-lg pointer-events-auto">
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="text-4xl mb-2">🌐</div>
+            <div className="text-3xl font-bold mb-1">{posts.length}</div>
+            <div className="text-gray-300 text-sm">Total Visualizations</div>
+          </div>
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="text-4xl mb-2">❤️</div>
+            <div className="text-3xl font-bold mb-1">
+              {posts.reduce((sum, p) => sum + (p.likes_count || 0), 0)}
+            </div>
+            <div className="text-gray-300 text-sm">Total Likes</div>
+          </div>
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="text-4xl mb-2">💬</div>
+            <div className="text-3xl font-bold mb-1">
+              {posts.reduce((sum, p) => sum + (p.comments_count || 0), 0)}
+            </div>
+            <div className="text-gray-300 text-sm">Total Comments</div>
+          </div>
+        </div>
+
+        {/* URL Tree Structure */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-xl p-8 border border-white/20">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+            <span>🗂️</span>
+            <span>URL Structure</span>
+          </h2>
+
+          <div className="space-y-2 font-mono text-sm">
+            {/* Root */}
+            <div className="flex items-start gap-2">
+              <span className="text-purple-400">📁</span>
+              <div className="flex-1">
+                <a 
+                  href={baseUrl}
+                  target="_blank"
+                  className="text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  {baseUrl}/
+                </a>
+                <span className="text-gray-500 ml-3">- Homepage Feed</span>
+              </div>
+            </div>
+
+            {/* Posts */}
+            {posts.map((post, index) => (
+              <div key={post.id} className="ml-6 space-y-1">
+                <div className="flex items-start gap-2">
+                  <span className="text-gray-500">
+                    {index === posts.length - 1 ? '└─' : '├─'}
+                  </span>
+                  <span className="text-green-400">🌍</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a 
+                        href={`${baseUrl}/?post=${post.slug}`}
+                        target="_blank"
+                        className="text-blue-400 hover:text-blue-300 hover:underline"
+                      >
+                        ?post={post.slug}
+                      </a>
+                      <button
+                        onClick={() => copyToClipboard(`${baseUrl}/?post=${post.slug}`)}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition"
+                        title="Copy URL"
+                      >
+                        📋
+                      </button>
+                    </div>
+                    <div className="text-gray-400 mt-1 text-xs">
                       {post.title}
-                    </h2>
+                    </div>
                     {post.description && (
-                      <p className="text-white/90 text-sm mb-4 drop-shadow-lg pointer-events-auto">
+                      <div className="text-gray-500 mt-1 text-xs italic">
                         {post.description}
-                      </p>
+                      </div>
                     )}
+                    
+                    {/* Embed URL */}
+                    <div className="ml-4 mt-2 flex items-start gap-2">
+                      <span className="text-gray-600">└─</span>
+                      <span className="text-yellow-400">📺</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <a 
+                            href={`${baseUrl}/embed/${post.slug}`}
+                            target="_blank"
+                            className="text-blue-400 hover:text-blue-300 hover:underline"
+                          >
+                            /embed/{post.slug}
+                          </a>
+                          <button
+                            onClick={() => copyToClipboard(`${baseUrl}/embed/${post.slug}`)}
+                            className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition"
+                            title="Copy Embed URL"
+                          >
+                            📋
+                          </button>
+                        </div>
+                        <div className="text-gray-500 mt-1 text-xs">
+                          Embeddable version
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                      <span>❤️ {post.likes_count || 0}</span>
+                      <span>💬 {post.comments_count || 0}</span>
+                      <span>📅 {new Date(post.created_at).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
+              </div>
+            ))}
 
-                {/* Right side action buttons */}
-                <div className="absolute right-4 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
-                  {/* Like */}
-                  <button 
-                    onClick={handleLike}
-                    className="flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                      <span className="text-2xl">❤️</span>
-                    </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
-                      {post.likes_count || 0}
-                    </span>
-                  </button>
-
-                  {/* Comments */}
-                  <button 
-                    onClick={() => setIsCommentsOpen(true)}
-                    className="flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                      <span className="text-2xl">💬</span>
-                    </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
-                      {post.comments_count || 0}
-                    </span>
-                  </button>
-
-                  {/* Share */}
-                  <button 
-                    onClick={handleShare}
-                    className="flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                      <span className="text-2xl">🔗</span>
-                    </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
-                      Share
-                    </span>
-                  </button>
-
-                  {/* NEW: Sitemap */}
-                  <a 
-                    href="/sitemap-tree"
-                    className="flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                      <span className="text-2xl">🗺️</span>
-                    </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
-                      Map
-                    </span>
-                  </a>
-                </div>
-
-                {/* Navigation arrows */}
-                {index < posts.length - 1 && (
-                  <button
-                    onClick={() => navigateToPost(index + 1)}
-                    className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group"
-                  >
-                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
-                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </button>
-                )}
-                
-                {index > 0 && (
-                  <button
-                    onClick={() => navigateToPost(index - 1)}
-                    className="absolute left-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group"
-                  >
-                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
-                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </div>
-                  </button>
-                )}
-              </>
-            )}
+            {/* Sitemap XML */}
+            <div className="flex items-start gap-2 mt-4">
+              <span className="text-purple-400">📄</span>
+              <div className="flex-1">
+                <a 
+                  href={`${baseUrl}/sitemap.xml`}
+                  target="_blank"
+                  className="text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  /sitemap.xml
+                </a>
+                <span className="text-gray-500 ml-3">- Search Engine Sitemap</span>
+              </div>
+            </div>
           </div>
-        ))}
-      </main>
+        </div>
 
-      {isCommentsOpen && posts[currentIndex] && (
-        <CommentPanel
-          postId={posts[currentIndex].id}
-          onClose={() => setIsCommentsOpen(false)}
-          onCommentAdded={() => {
-            setPosts(prev => prev.map((p, i) => 
-              i === currentIndex ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p
-            ));
-          }}
-        />
-      )}
-      
-      {/* Pagination Dots */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
-        {posts.map((_, index) => (
-          <div
-            key={index}
-            className={`h-2 rounded-full transition-all ${
-              index === currentIndex 
-                ? 'w-8 bg-white' 
-                : 'w-2 bg-white/30'
-            }`}
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={
-      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Loading...</p>
+        {/* Footer Info */}
+        <div className="mt-12 text-center text-gray-400 text-sm">
+          <p className="mb-2">
+            All visualizations are powered by{' '}
+            <a 
+              href="https://globe.gl" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-purple-400 hover:text-purple-300 underline"
+            >
+              Globe.GL
+            </a>
+          </p>
+          <p>
+            Built with Next.js, Supabase, and Three.js
+          </p>
         </div>
       </div>
-    }>
-      <FeedContent />
-    </Suspense>
+    </div>
   );
 }
