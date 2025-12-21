@@ -181,68 +181,69 @@ function FeedContent() {
 
             {index === currentIndex && (
               <>
-                {/* Title and Description - Moved to align Right so it doesn't clash with buttons on Left */}
-                <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none flex flex-col items-end">
-                  <div className="p-6 pb-8 text-right max-w-2xl">
-                    <h2 className="text-white text-xl font-bold mb-2 drop-shadow-lg pointer-events-auto">
+                {/* Info Overlay (Title/Description) - Positioned above the button bar */}
+                <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none">
+                  <div className="px-8 max-w-2xl">
+                    <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg pointer-events-auto">
                       {post.title}
                     </h2>
                     {post.description && (
-                      <p className="text-white/90 text-sm mb-4 drop-shadow-lg pointer-events-auto">
+                      <p className="text-white/90 text-sm drop-shadow-lg pointer-events-auto">
                         {post.description}
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Sidebar Buttons - MOVED TO LEFT to avoid covering data tables on the right */}
-                <div className="absolute left-5 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
+                {/* Bottom Horizontal Button Bar */}
+                <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-8 pointer-events-auto px-4">
                   <button onClick={handleLike} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">❤️</span>
                     </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       {post.likes_count || 0}
                     </span>
                   </button>
 
                   <button onClick={() => setIsCommentsOpen(true)} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">💬</span>
                     </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       {post.comments_count || 0}
                     </span>
                   </button>
 
                   <button onClick={handleShare} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">🔗</span>
                     </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       Share
                     </span>
                   </button>
 
                   <a href="/home" className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">🏠</span>
                     </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       Home
                     </span>
                   </a>
 
                   <a href="/sitemap-tree" className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">🗺️</span>
                     </div>
-                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       Map
                     </span>
                   </a>
                 </div>
 
+                {/* Navigation Arrows */}
                 {index < posts.length - 1 && (
                   <button onClick={() => navigateToPost(index + 1)} className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group">
                     <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
@@ -280,14 +281,15 @@ function FeedContent() {
         />
       )}
       
+      {/* Scroll indicator dots - tucked at the very bottom */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
         {posts.map((_, index) => (
           <div
             key={index}
-            className={`h-2 rounded-full transition-all ${
+            className={`h-1.5 rounded-full transition-all ${
               index === currentIndex 
-                ? 'w-8 bg-white' 
-                : 'w-2 bg-white/30'
+                ? 'w-6 bg-white' 
+                : 'w-1.5 bg-white/20'
             }`}
           />
         ))}
