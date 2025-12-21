@@ -9,6 +9,7 @@ function FeedContent() {
   const [posts, setPosts] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
