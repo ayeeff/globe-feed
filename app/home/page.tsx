@@ -1,9 +1,8 @@
-// app/home/page.tsx
+// app/home/page.tsx - Grid view
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import Image from 'next/image';
 
 interface Post {
   id: string;
@@ -45,7 +44,7 @@ export default function GridHomePage() {
   }, []);
 
   const handleCardClick = (slug: string) => {
-    router.push(`/feed?post=${slug}`);
+    router.push(`/?post=${slug}`);
   };
 
   if (loading) {
@@ -81,7 +80,7 @@ export default function GridHomePage() {
                 🗺️ Sitemap
               </a>
               <button
-                onClick={() => router.push('/feed')}
+                onClick={() => router.push('/')}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition flex items-center gap-2"
               >
                 🎬 Feed View
