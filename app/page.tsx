@@ -194,7 +194,6 @@ function FeedContent() {
                   </div>
                 </div>
 
-                {/* Action buttons - moved further left */}
                 <div className="absolute right-20 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
                   <button onClick={handleLike} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
@@ -239,7 +238,7 @@ function FeedContent() {
                     <span className="text-white text-xs font-semibold drop-shadow-lg">
                       Map
                     </span>
-                  </button>
+                  </a>
                 </div>
 
                 {index < posts.length - 1 && (
