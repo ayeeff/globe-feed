@@ -5,11 +5,13 @@ interface CustomVisualProps {
   css: string;
   html: string;
   scriptContent: string;
+  isActive?: boolean;
 }
 
-const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent }) => {
+const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, isActive = true }) => {
   const scriptRan = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const globeInstanceRef = useRef<any>(null);
   const [status, setStatus] = useState<string>("Initializing...");
 
   useEffect(() => {
@@ -36,7 +38,6 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
       try {
         setStatus("Loading Globe Library...");
 
-        // Load Globe.gl directly (it includes Three.js internally)
         if (!(window as any).Globe) {
           await loadScript("//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js", "globe-lib");
         }
@@ -44,27 +45,40 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
         setStatus("Preparing Container...");
         
-        // Wait for DOM to be ready
         await new Promise(resolve => requestAnimationFrame(resolve));
         await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Ensure container exists
-        const container = document.getElementById('globe-container');
-        if (!container) {
-          setStatus("Error: globe-container not found");
-          return;
-        }
 
         setStatus("Initializing Visualization...");
         
-        // Execute user script
         if ((window as any).Globe) {
           try {
-            // Wrap in additional delay to ensure Globe is fully ready
             setTimeout(() => {
               try {
-                const runVisual = new Function(scriptContent);
-                runVisual();
+                // Create a wrapper to capture the globe instance
+                const originalScript = scriptContent;
+                const wrappedScript = `
+                  (function() {
+                    const originalGlobe = window.Globe;
+                    let capturedInstance = null;
+                    
+                    // Intercept Globe creation
+                    window.Globe = function(...args) {
+                      const instance = originalGlobe(...args);
+                      capturedInstance = instance;
+                      return instance;
+                    };
+                    
+                    // Run original script
+                    ${originalScript}
+                    
+                    // Restore and return
+                    window.Globe = originalGlobe;
+                    return capturedInstance;
+                  })();
+                `;
+                
+                const runVisual = new Function(wrappedScript);
+                globeInstanceRef.current = runVisual();
                 
                 scriptRan.current = true;
                 setStatus("");
@@ -92,9 +106,21 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
     return () => {
       console.log("🧹 Cleaning up CustomVisual");
-      const container = document.getElementById('globe-container');
+      
+      // Stop globe animations
+      if (globeInstanceRef.current) {
+        try {
+          const controls = globeInstanceRef.current.controls();
+          if (controls) {
+            controls.autoRotate = false;
+          }
+        } catch (e) {
+          console.error("Error stopping animations:", e);
+        }
+      }
+      
+      const container = document.getElementById('globeViz') || document.getElementById('globe-container');
       if (container) {
-        // Clear any WebGL contexts
         const canvas = container.querySelector('canvas');
         if (canvas) {
           const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
@@ -103,7 +129,6 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
             if (loseContext) loseContext.loseContext();
           }
         }
-        // Clear container
         while (container.firstChild) {
           container.removeChild(container.firstChild);
         }
@@ -111,6 +136,20 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
     };
 
   }, [scriptContent]);
+
+  // Pause/resume globe rotation based on active state
+  useEffect(() => {
+    if (!globeInstanceRef.current) return;
+
+    try {
+      const controls = globeInstanceRef.current.controls();
+      if (controls) {
+        controls.autoRotate = isActive;
+      }
+    } catch (e) {
+      // Controls might not be available
+    }
+  }, [isActive]);
 
   return (
     <>
@@ -124,7 +163,6 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent })
 
       <div 
         ref={containerRef}
-        id="globe-container" 
         className="w-full h-full"
         dangerouslySetInnerHTML={{ __html: html }} 
       />
