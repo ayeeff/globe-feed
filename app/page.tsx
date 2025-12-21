@@ -9,6 +9,7 @@ function FeedContent() {
   const [posts, setPosts] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,6 +36,7 @@ function FeedContent() {
           const index = data.findIndex(p => p.slug === slug);
           if (index !== -1) {
             setCurrentIndex(index);
+            setLoadedIndexes(new Set([index]));
             setTimeout(() => {
               containerRef.current?.children[index]?.scrollIntoView({ behavior: 'auto' });
             }, 100);
@@ -55,7 +57,7 @@ function FeedContent() {
     }
   }, [currentIndex, posts, router]);
 
-  // Scroll detection
+  // Scroll detection with lazy loading
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -67,12 +69,19 @@ function FeedContent() {
       
       if (newIndex !== currentIndex && newIndex >= 0 && newIndex < posts.length) {
         setCurrentIndex(newIndex);
+        
+        // Load current, previous, and next visualizations
+        const indexesToLoad = new Set(loadedIndexes);
+        indexesToLoad.add(newIndex);
+        if (newIndex > 0) indexesToLoad.add(newIndex - 1);
+        if (newIndex < posts.length - 1) indexesToLoad.add(newIndex + 1);
+        setLoadedIndexes(indexesToLoad);
       }
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [currentIndex, posts.length]);
+  }, [currentIndex, posts.length, loadedIndexes]);
 
   const handleShare = async () => {
     const url = `${window.location.origin}/?post=${posts[currentIndex].slug}`;
@@ -87,7 +96,6 @@ function FeedContent() {
         console.log('Share cancelled');
       }
     } else {
-      // Fallback: copy to clipboard
       navigator.clipboard.writeText(url);
       alert('Link copied to clipboard!');
     }
@@ -97,12 +105,12 @@ function FeedContent() {
     const post = posts[currentIndex];
     const { error } = await supabase
       .from('posts')
-      .update({ likes_count: post.likes_count + 1 })
+      .update({ likes_count: (post.likes_count || 0) + 1 })
       .eq('id', post.id);
 
     if (!error) {
       setPosts(prev => prev.map((p, i) => 
-        i === currentIndex ? { ...p, likes_count: p.likes_count + 1 } : p
+        i === currentIndex ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
       ));
     }
   };
@@ -129,77 +137,91 @@ function FeedContent() {
             key={post.id} 
             className="h-screen w-full snap-start snap-always relative"
           >
-            <CustomVisual 
-              css={post.custom_css} 
-              html={post.custom_html} 
-              scriptContent={post.custom_script} 
-            />
+            {loadedIndexes.has(index) ? (
+              <CustomVisual 
+                css={post.custom_css} 
+                html={post.custom_html} 
+                scriptContent={post.custom_script}
+                isActive={index === currentIndex}
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
+                <div className="text-center text-white/50">
+                  <div className="text-4xl mb-2">🌍</div>
+                  <p className="text-sm">Swipe to load</p>
+                </div>
+              </div>
+            )}
 
-            {/* Overlay UI */}
-            <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none">
-              <div className="p-6 pb-8">
-                <h2 className="text-white text-xl font-bold mb-2 drop-shadow-lg pointer-events-auto">
-                  {post.title}
-                </h2>
-                {post.description && (
-                  <p className="text-white/90 text-sm mb-4 drop-shadow-lg pointer-events-auto">
-                    {post.description}
-                  </p>
+            {/* Overlay UI - Only show on active slide */}
+            {index === currentIndex && (
+              <>
+                <div className="absolute bottom-0 left-0 right-0 z-[20000] pointer-events-none">
+                  <div className="p-6 pb-8">
+                    <h2 className="text-white text-xl font-bold mb-2 drop-shadow-lg pointer-events-auto">
+                      {post.title}
+                    </h2>
+                    {post.description && (
+                      <p className="text-white/90 text-sm mb-4 drop-shadow-lg pointer-events-auto">
+                        {post.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right side action buttons */}
+                <div className="absolute right-4 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
+                  {/* Like */}
+                  <button 
+                    onClick={handleLike}
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                      <span className="text-2xl">❤️</span>
+                    </div>
+                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                      {post.likes_count || 0}
+                    </span>
+                  </button>
+
+                  {/* Comments */}
+                  <button 
+                    onClick={() => setIsCommentsOpen(true)}
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                      <span className="text-2xl">💬</span>
+                    </div>
+                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                      {post.comments_count || 0}
+                    </span>
+                  </button>
+
+                  {/* Share */}
+                  <button 
+                    onClick={handleShare}
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
+                      <span className="text-2xl">🔗</span>
+                    </div>
+                    <span className="text-white text-xs font-semibold drop-shadow-lg">
+                      Share
+                    </span>
+                  </button>
+                </div>
+
+                {/* Scroll indicator */}
+                {index < posts.length - 1 && (
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-[20000] pointer-events-none">
+                    <div className="animate-bounce">
+                      <svg className="w-6 h-6 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
-
-            {/* Right side action buttons */}
-            <div className="absolute right-4 bottom-24 z-[20000] flex flex-col gap-6 pointer-events-auto">
-              {/* Like */}
-              <button 
-                onClick={handleLike}
-                className="flex flex-col items-center gap-1 group"
-              >
-                <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                  <span className="text-2xl">❤️</span>
-                </div>
-                <span className="text-white text-xs font-semibold drop-shadow-lg">
-                  {post.likes_count || 0}
-                </span>
-              </button>
-
-              {/* Comments */}
-              <button 
-                onClick={() => setIsCommentsOpen(true)}
-                className="flex flex-col items-center gap-1 group"
-              >
-                <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                  <span className="text-2xl">💬</span>
-                </div>
-                <span className="text-white text-xs font-semibold drop-shadow-lg">
-                  {post.comments_count || 0}
-                </span>
-              </button>
-
-              {/* Share */}
-              <button 
-                onClick={handleShare}
-                className="flex flex-col items-center gap-1 group"
-              >
-                <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition">
-                  <span className="text-2xl">🔗</span>
-                </div>
-                <span className="text-white text-xs font-semibold drop-shadow-lg">
-                  Share
-                </span>
-              </button>
-            </div>
-
-            {/* Scroll indicator */}
-            {index < posts.length - 1 && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-[20000] pointer-events-none">
-                <div className="animate-bounce">
-                  <svg className="w-6 h-6 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-              </div>
+              </>
             )}
           </div>
         ))}
