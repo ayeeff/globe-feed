@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import CustomVisual from '../components/CustomVisual';
 import CommentPanel from '../components/CommentPanel';
 
-export default function Home() {
+function FeedContent() {
   const [posts, setPosts] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
@@ -49,7 +49,9 @@ export default function Home() {
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
-      router.replace(`/?post=${slug}`, { scroll: false });
+      if (slug) {
+        router.replace(`/?post=${slug}`, { scroll: false });
+      }
     }
   }, [currentIndex, posts, router]);
 
@@ -216,5 +218,20 @@ export default function Home() {
         />
       )}
     </>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <FeedContent />
+    </Suspense>
   );
 }
