@@ -61,6 +61,8 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
         const needsCesium = scriptContent.includes('Cesium.') || html.includes('cesium');
         const needsGlobe = scriptContent.includes('Globe(') || scriptContent.includes('window.Globe');
         const needsLeaflet = scriptContent.includes('L.map') || scriptContent.includes('L.tileLayer') || html.includes('leaflet');
+        const needsD3 = scriptContent.includes('d3.') || html.includes('d3');
+        const needsD3Sankey = scriptContent.includes('d3.sankey') || scriptContent.includes('sankey');
 
         if (needsCesium) {
           setStatus("Loading Cesium Library...");
@@ -98,6 +100,40 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
             );
           }
           console.log("✅ Leaflet Ready");
+        }
+
+        if (needsD3) {
+          setStatus("Loading D3 Library...");
+          
+          // Load D3.js
+          if (!(window as any).d3) {
+            await loadScript(
+              "https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js",
+              "d3-lib"
+            );
+          }
+          console.log("✅ D3 Ready");
+        }
+
+        if (needsD3Sankey) {
+          setStatus("Loading D3 Sankey...");
+          
+          // Ensure D3 is loaded first
+          if (!(window as any).d3) {
+            await loadScript(
+              "https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js",
+              "d3-lib"
+            );
+          }
+          
+          // Load D3 Sankey
+          if (!(window as any).d3 || !(window as any).d3.sankey) {
+            await loadScript(
+              "https://cdnjs.cloudflare.com/ajax/libs/d3-sankey/0.12.3/d3-sankey.min.js",
+              "d3-sankey-lib"
+            );
+          }
+          console.log("✅ D3 Sankey Ready");
         }
 
         if (needsGlobe) {
