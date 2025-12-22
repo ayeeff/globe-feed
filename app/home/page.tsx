@@ -1,4 +1,4 @@
-// app/home/page.tsx - Grid view
+// app/home/page.tsx - Grid view with Search
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,11 +14,14 @@ interface Post {
   likes_count: number;
   comments_count: number;
   shares_count: number;
+  custom_html: string;
 }
 
 export default function GridHomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -36,12 +39,32 @@ export default function GridHomePage() {
       }
       
       if (data) {
+        setAllPosts(data);
         setPosts(data);
         setLoading(false);
       }
     }
     fetchPosts();
   }, []);
+
+  // Search functionality
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setPosts(allPosts);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = allPosts.filter(post => {
+      return (
+        post.title?.toLowerCase().includes(query) ||
+        post.description?.toLowerCase().includes(query) ||
+        post.custom_html?.toLowerCase().includes(query)
+      );
+    });
+
+    setPosts(filtered);
+  }, [searchQuery, allPosts]);
 
   const handleCardClick = (slug: string) => {
     router.push(`/?post=${slug}`);
@@ -63,7 +86,7 @@ export default function GridHomePage() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-black/40 backdrop-blur-lg border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="text-4xl">🌍</div>
               <div>
@@ -87,6 +110,32 @@ export default function GridHomePage() {
               </button>
             </div>
           </div>
+
+          {/* Search Bar */}
+          <div className="relative max-w-2xl mx-auto">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search visualizations by title, description, or content..."
+              className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -99,7 +148,9 @@ export default function GridHomePage() {
               <div className="text-3xl">🌐</div>
               <div>
                 <div className="text-2xl font-bold text-white">{posts.length}</div>
-                <div className="text-sm text-gray-400">Visualizations</div>
+                <div className="text-sm text-gray-400">
+                  {searchQuery ? 'Results' : 'Visualizations'}
+                </div>
               </div>
             </div>
           </div>
@@ -126,6 +177,15 @@ export default function GridHomePage() {
             </div>
           </div>
         </div>
+
+        {/* Search Results Info */}
+        {searchQuery && posts.length > 0 && (
+          <div className="mb-6 text-center">
+            <p className="text-gray-400 text-sm">
+              Found <span className="text-white font-semibold">{posts.length}</span> result{posts.length !== 1 ? 's' : ''} for "{searchQuery}"
+            </p>
+          </div>
+        )}
 
         {/* Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -204,9 +264,26 @@ export default function GridHomePage() {
         {/* Empty State */}
         {posts.length === 0 && !loading && (
           <div className="text-center py-20">
-            <div className="text-6xl mb-4">🌍</div>
-            <h2 className="text-2xl font-bold text-white mb-2">No Visualizations Yet</h2>
-            <p className="text-gray-400">Check back soon for interactive globe visualizations!</p>
+            <div className="text-6xl mb-4">
+              {searchQuery ? '🔍' : '🌍'}
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">
+              {searchQuery ? 'No Results Found' : 'No Visualizations Yet'}
+            </h2>
+            <p className="text-gray-400 mb-6">
+              {searchQuery 
+                ? `No visualizations match "${searchQuery}". Try different keywords.`
+                : 'Check back soon for interactive globe visualizations!'
+              }
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition"
+              >
+                Clear Search
+              </button>
+            )}
           </div>
         )}
       </main>
