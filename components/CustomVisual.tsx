@@ -60,6 +60,7 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
         // Detect which library is needed based on script content
         const needsCesium = scriptContent.includes('Cesium.') || html.includes('cesium');
         const needsGlobe = scriptContent.includes('Globe(') || scriptContent.includes('window.Globe');
+        const needsLeaflet = scriptContent.includes('L.map') || scriptContent.includes('L.tileLayer') || html.includes('leaflet');
 
         if (needsCesium) {
           setStatus("Loading Cesium Library...");
@@ -78,6 +79,25 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
             );
           }
           console.log("✅ Cesium Ready");
+        }
+
+        if (needsLeaflet) {
+          setStatus("Loading Leaflet Library...");
+          
+          // Load Leaflet CSS
+          await loadStylesheet(
+            "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+            "leaflet-css"
+          );
+          
+          // Load Leaflet JS
+          if (!(window as any).L) {
+            await loadScript(
+              "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+              "leaflet-lib"
+            );
+          }
+          console.log("✅ Leaflet Ready");
         }
 
         if (needsGlobe) {
@@ -126,8 +146,18 @@ const CustomVisual: React.FC<CustomVisualProps> = ({ css, html, scriptContent, i
                 }
               }
               
+              // Clean up Leaflet map if exists
+              if ((window as any).leafletMap) {
+                try {
+                  (window as any).leafletMap.remove();
+                  (window as any).leafletMap = null;
+                } catch (e) {
+                  console.error("Error removing Leaflet map:", e);
+                }
+              }
+              
               // Clean up DOM containers
-              const containers = ['globeViz', 'globe-container', 'cesiumContainer'];
+              const containers = ['globeViz', 'globe-container', 'cesiumContainer', 'map', 'leaflet-map'];
               containers.forEach(id => {
                 const container = document.getElementById(id);
                 if (container) {
