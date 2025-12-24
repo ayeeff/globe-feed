@@ -1,4 +1,4 @@
-// app/page.tsx
+// app/page.tsx - WITH VIEW TRACKING
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -11,7 +11,6 @@ function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const embedUrl = typeof window !== 'undefined' ? `${window.location.origin}/embed/${post.slug}` : '';
   
-  // YouTube style fixed dimensions (800x550)
   const embedCode = `<iframe width="800" height="550" src="${embedUrl}" title="${post.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
 
   const handleCopy = () => {
@@ -78,12 +77,42 @@ function FeedContent() {
   const [isEmbedOpen, setIsEmbedOpen] = useState(false);
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
   
+  // Track which posts have been viewed in this session
+  const viewedPostsRef = useRef<Set<string>>(new Set());
+  
   // REFS
   const containerRef = useRef<HTMLDivElement>(null);
-  const isProgrammaticScroll = useRef(false); // Prevents scroll listener from fighting navigation
-  const hasInitialLoadHappened = useRef(false); // Prevents double fetching
+  const isProgrammaticScroll = useRef(false);
+  const hasInitialLoadHappened = useRef(false);
   
   const searchParams = useSearchParams();
+
+  // Function to increment view count
+  const incrementViewCount = async (postId: string) => {
+    // Only increment once per session per post
+    if (viewedPostsRef.current.has(postId)) return;
+    
+    try {
+      const { error } = await supabase.rpc('increment_views_count', { 
+        post_id: postId 
+      });
+
+      if (!error) {
+        viewedPostsRef.current.add(postId);
+        
+        // Update local state to reflect new view count
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, views_count: (p.views_count || 0) + 1 } : p
+        ));
+        
+        console.log('📊 View counted for post:', postId);
+      } else {
+        console.error('Error incrementing view count:', error);
+      }
+    } catch (error) {
+      console.error('Error calling increment_views_count:', error);
+    }
+  };
 
   // 1. Fetch Posts & Handle Initial Deep Link
   useEffect(() => {
@@ -105,29 +134,32 @@ function FeedContent() {
         setPosts(data);
         hasInitialLoadHappened.current = true;
         
-        // Handle Deep Linking (Only once on initial load)
+        // Handle Deep Linking
         const slug = searchParams.get('post');
         if (slug) {
           const index = data.findIndex(p => p.slug === slug);
           if (index !== -1) {
-            // Lock scrolling so the scroll listener doesn't reset us to 0
             isProgrammaticScroll.current = true;
             
             setCurrentIndex(index);
             setLoadedIndexes(new Set([index]));
             
-            // Force scroll after a slight delay to ensure DOM is ready
+            // Track view for deep-linked post
+            incrementViewCount(data[index].id);
+            
             setTimeout(() => {
               if (containerRef.current?.children[index]) {
                 containerRef.current.children[index].scrollIntoView({ behavior: 'auto' });
                 
-                // Unlock scrolling after animation should be done
                 setTimeout(() => {
                   isProgrammaticScroll.current = false;
                 }, 500);
               }
             }, 100);
           }
+        } else if (data.length > 0) {
+          // Track view for first post if no deep link
+          incrementViewCount(data[0].id);
         }
       }
     }
@@ -135,25 +167,30 @@ function FeedContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
-  // 2. Update URL when user swipes (BUT don't trigger re-fetches)
+  // 2. Track view when currentIndex changes
+  useEffect(() => {
+    if (posts.length > 0 && posts[currentIndex]) {
+      incrementViewCount(posts[currentIndex].id);
+    }
+  }, [currentIndex, posts]);
+
+  // 3. Update URL when user swipes
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
       if (slug) {
-        // Use replaceState directly to avoid triggering Next.js navigation events if possible
         const newUrl = `/?post=${slug}`;
         window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
       }
     }
   }, [currentIndex, posts]);
 
-  // 3. Handle Scroll (Swipe Detection)
+  // 4. Handle Scroll (Swipe Detection)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
-      // If we are programmatically scrolling (jumping to a link), ignore scroll events
       if (isProgrammaticScroll.current) return;
 
       const scrollTop = container.scrollTop;
@@ -175,7 +212,7 @@ function FeedContent() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [currentIndex, posts.length, loadedIndexes]);
 
-  // 4. Keyboard Navigation
+  // 5. Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isCommentsOpen || isEmbedOpen) return;
@@ -196,7 +233,6 @@ function FeedContent() {
   const navigateToPost = (index: number) => {
     if (index < 0 || index >= posts.length) return;
     
-    // Lock scroll listener during smooth scroll
     isProgrammaticScroll.current = true;
     
     containerRef.current?.children[index]?.scrollIntoView({ 
@@ -204,7 +240,6 @@ function FeedContent() {
       block: 'start'
     });
 
-    // Unlock after smooth scroll (approx 500ms)
     setTimeout(() => {
       isProgrammaticScroll.current = false;
     }, 500);
@@ -285,7 +320,7 @@ function FeedContent() {
 
             {index === currentIndex && (
               <>
-                {/* Info Overlay (Title/Description) - Positioned above the button bar */}
+                {/* Info Overlay */}
                 <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none">
                   <div className="px-8 max-w-2xl">
                     <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg pointer-events-auto">
@@ -328,10 +363,9 @@ function FeedContent() {
                     </span>
                   </button>
 
-                  {/* EMBED BUTTON */}
                   <button onClick={() => setIsEmbedOpen(true)} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
-                      <span className="text-2xl">code</span>
+                      <span className="text-2xl">📟</span>
                     </div>
                     <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       Embed
@@ -396,7 +430,6 @@ function FeedContent() {
         />
       )}
 
-      {/* Embed Modal */}
       {isEmbedOpen && posts[currentIndex] && (
         <EmbedModal 
           post={posts[currentIndex]} 
