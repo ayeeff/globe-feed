@@ -1,10 +1,11 @@
-// app/page.tsx - WITH VIEW TRACKING
+// app/page.tsx - WITH AUTHENTICATION AND VIEW TRACKING
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import CustomVisual from '../components/CustomVisual';
 import CommentPanel from '../components/CommentPanel';
+import { User } from '@supabase/supabase-js';
 
 // --- Embed Modal Component ---
 function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
@@ -76,6 +77,8 @@ function FeedContent() {
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isEmbedOpen, setIsEmbedOpen] = useState(false);
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
+  const [user, setUser] = useState<User | null>(null);
+  const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
   
   // Track which posts have been viewed in this session
   const viewedPostsRef = useRef<Set<string>>(new Set());
@@ -87,9 +90,44 @@ function FeedContent() {
   
   const searchParams = useSearchParams();
 
+  // Check for authenticated user
+  useEffect(() => {
+    checkUser();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserLikes(session.user.id);
+      } else {
+        setUserLikes(new Set());
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const checkUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
+    if (user) {
+      await fetchUserLikes(user.id);
+    }
+  };
+
+  const fetchUserLikes = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('interactions')
+      .select('post_id')
+      .eq('user_id', userId)
+      .eq('type', 'like');
+
+    if (!error && data) {
+      setUserLikes(new Set(data.map(i => i.post_id)));
+    }
+  };
+
   // Function to increment view count
   const incrementViewCount = async (postId: string) => {
-    // Only increment once per session per post
     if (viewedPostsRef.current.has(postId)) return;
     
     try {
@@ -99,15 +137,10 @@ function FeedContent() {
 
       if (!error) {
         viewedPostsRef.current.add(postId);
-        
-        // Update local state to reflect new view count
         setPosts(prev => prev.map(p => 
           p.id === postId ? { ...p, views_count: (p.views_count || 0) + 1 } : p
         ));
-        
         console.log('📊 View counted for post:', postId);
-      } else {
-        console.error('Error incrementing view count:', error);
       }
     } catch (error) {
       console.error('Error calling increment_views_count:', error);
@@ -134,23 +167,18 @@ function FeedContent() {
         setPosts(data);
         hasInitialLoadHappened.current = true;
         
-        // Handle Deep Linking
         const slug = searchParams.get('post');
         if (slug) {
           const index = data.findIndex(p => p.slug === slug);
           if (index !== -1) {
             isProgrammaticScroll.current = true;
-            
             setCurrentIndex(index);
             setLoadedIndexes(new Set([index]));
-            
-            // Track view for deep-linked post
             incrementViewCount(data[index].id);
             
             setTimeout(() => {
               if (containerRef.current?.children[index]) {
                 containerRef.current.children[index].scrollIntoView({ behavior: 'auto' });
-                
                 setTimeout(() => {
                   isProgrammaticScroll.current = false;
                 }, 500);
@@ -158,13 +186,11 @@ function FeedContent() {
             }, 100);
           }
         } else if (data.length > 0) {
-          // Track view for first post if no deep link
           incrementViewCount(data[0].id);
         }
       }
     }
     fetchPosts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
   // 2. Track view when currentIndex changes
@@ -264,17 +290,64 @@ function FeedContent() {
   };
 
   const handleLike = async () => {
-    const post = posts[currentIndex];
-    const { error } = await supabase
-      .from('posts')
-      .update({ likes_count: (post.likes_count || 0) + 1 })
-      .eq('id', post.id);
-
-    if (!error) {
-      setPosts(prev => prev.map((p, i) => 
-        i === currentIndex ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
-      ));
+    if (!user) {
+      window.location.href = '/home';
+      return;
     }
+
+    const post = posts[currentIndex];
+    const isLiked = userLikes.has(post.id);
+
+    try {
+      if (isLiked) {
+        // Unlike
+        await supabase
+          .from('interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('post_id', post.id)
+          .eq('type', 'like');
+
+        await supabase.rpc('decrement_likes_count', { post_id: post.id });
+
+        setUserLikes(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(post.id);
+          return newSet;
+        });
+
+        setPosts(prev => prev.map((p, i) => 
+          i === currentIndex ? { ...p, likes_count: Math.max(0, (p.likes_count || 0) - 1) } : p
+        ));
+      } else {
+        // Like
+        await supabase
+          .from('interactions')
+          .insert({
+            user_id: user.id,
+            post_id: post.id,
+            type: 'like'
+          });
+
+        await supabase.rpc('increment_likes_count', { post_id: post.id });
+
+        setUserLikes(prev => new Set(prev).add(post.id));
+
+        setPosts(prev => prev.map((p, i) => 
+          i === currentIndex ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
+        ));
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
+  const handleCommentClick = () => {
+    if (!user) {
+      window.location.href = '/home';
+      return;
+    }
+    setIsCommentsOpen(true);
   };
 
   if (posts.length === 0) {
@@ -287,6 +360,9 @@ function FeedContent() {
       </div>
     );
   }
+
+  const currentPost = posts[currentIndex];
+  const isLiked = currentPost && userLikes.has(currentPost.id);
 
   return (
     <>
@@ -336,16 +412,23 @@ function FeedContent() {
 
                 {/* Bottom Horizontal Button Bar */}
                 <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-6 pointer-events-auto px-4">
-                  <button onClick={handleLike} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
-                      <span className="text-2xl">❤️</span>
+                  <button 
+                    onClick={handleLike} 
+                    className={`flex flex-col items-center gap-1 group ${isLiked ? 'scale-110' : ''}`}
+                  >
+                    <div className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border ${
+                      isLiked 
+                        ? 'bg-red-500/30 border-red-500/50' 
+                        : 'bg-black/50 border-white/10'
+                    }`}>
+                      <span className={`text-2xl ${isLiked ? 'animate-pulse' : ''}`}>❤️</span>
                     </div>
                     <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
                       {post.likes_count || 0}
                     </span>
                   </button>
 
-                  <button onClick={() => setIsCommentsOpen(true)} className="flex flex-col items-center gap-1 group">
+                  <button onClick={handleCommentClick} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
                       <span className="text-2xl">💬</span>
                     </div>
