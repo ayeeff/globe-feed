@@ -1,7 +1,7 @@
 // app/page.tsx - WITH AUTHENTICATION AND VIEW TRACKING
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import CustomVisual from '../components/CustomVisual';
 import CommentPanel from '../components/CommentPanel';
@@ -89,6 +89,7 @@ function FeedContent() {
   const hasInitialLoadHappened = useRef(false);
   
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Check for authenticated user
   useEffect(() => {
@@ -154,7 +155,14 @@ function FeedContent() {
     async function fetchPosts() {
       const { data, error } = await supabase
         .from('posts')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            slug
+          )
+        `)
         .eq('type', 'custom')
         .order('created_at', { ascending: false });
 
@@ -399,6 +407,16 @@ function FeedContent() {
                 {/* Info Overlay */}
                 <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none">
                   <div className="px-8 max-w-2xl">
+                    {/* Category Tag */}
+                    {post.categories && (
+                      <button
+                        onClick={() => router.push(`/home?category=${post.categories.slug}`)}
+                        className="inline-block mb-3 px-4 py-1.5 bg-purple-500/30 hover:bg-purple-500/40 backdrop-blur-sm border border-purple-500/50 text-purple-200 rounded-full text-sm font-semibold transition pointer-events-auto drop-shadow-lg"
+                      >
+                        {post.categories.name}
+                      </button>
+                    )}
+                    
                     <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg pointer-events-auto">
                       {post.title}
                     </h2>
