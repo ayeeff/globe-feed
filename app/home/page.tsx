@@ -153,8 +153,8 @@ export default function GridHomePage() {
     setPosts(filtered);
   }, [searchQuery, selectedCategory, allPosts]);
 
-  const handleCardClick = (slug: string) => {
-    router.push(`/?post=${slug}`);
+  const handleCardClick = (e: React.MouseEvent, slug: string) => {
+    (e.ctrlKey || e.metaKey || e.button === 1) ? window.open(`/?post=${slug}`, '_blank') : router.push(`/?post=${slug}`);
   };
 
   const handleCategoryClick = (categorySlug: string) => {
@@ -517,7 +517,14 @@ export default function GridHomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              onClick={() => handleCardClick(post.slug)}
+              onClick={(e) => handleCardClick(e, post.slug)}
+              onMouseDown={(e) => {
+                // Handle middle-click
+                if (e.button === 1) {
+                  e.preventDefault();
+                  handleCardClick(e, post.slug);
+                }
+              }}
               className="group cursor-pointer"
             >
               {/* Card */}
@@ -541,6 +548,7 @@ export default function GridHomePage() {
                     <div className="text-white text-center">
                       <div className="text-4xl mb-2">▶️</div>
                       <div className="text-sm font-semibold">View Visualization</div>
+                      <div className="text-xs text-gray-300 mt-1">Ctrl+Click for new tab</div>
                     </div>
                   </div>
 
