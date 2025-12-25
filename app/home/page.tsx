@@ -130,6 +130,67 @@ export default function GridHomePage() {
     router.push(`/?post=${slug}`);
   };
 
+  const handleLike = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    try {
+      // Check if user already liked this post
+      const { data: existingLike } = await supabase
+        .from('interactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('post_id', postId)
+        .eq('type', 'like')
+        .single();
+
+      if (existingLike) {
+        // Unlike
+        await supabase
+          .from('interactions')
+          .delete()
+          .eq('id', existingLike.id);
+
+        // Decrement likes count
+        await supabase.rpc('decrement_likes_count', { post_id: postId });
+
+        // Update local state
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, likes_count: Math.max(0, (p.likes_count || 0) - 1) } : p
+        ));
+        setAllPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, likes_count: Math.max(0, (p.likes_count || 0) - 1) } : p
+        ));
+      } else {
+        // Like
+        await supabase
+          .from('interactions')
+          .insert({
+            user_id: user.id,
+            post_id: postId,
+            type: 'like'
+          });
+
+        // Increment likes count
+        await supabase.rpc('increment_likes_count', { post_id: postId });
+
+        // Update local state
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
+        ));
+        setAllPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
+        ));
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
   // Auth handlers
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -445,9 +506,12 @@ export default function GridHomePage() {
                   {/* Meta Info */}
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleLike(e, post.id)}
+                        className="flex items-center gap-1 hover:text-red-400 transition"
+                      >
                         ❤️ {post.likes_count || 0}
-                      </span>
+                      </button>
                       <span className="flex items-center gap-1">
                         💬 {post.comments_count || 0}
                       </span>
