@@ -1,6 +1,8 @@
+// components/CommentPanel.tsx - WITH AUTHENTICATION
 "use client";
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 interface CommentPanelProps {
   postId: string;
@@ -10,55 +12,65 @@ interface CommentPanelProps {
 
 interface Comment {
   id: string;
-  username: string;
+  user_id: string;
   content: string;
   created_at: string;
+  profiles: {
+    username: string | null;
+    avatar_url: string | null;
+  };
 }
 
 export default function CommentPanel({ postId, onClose, onCommentAdded }: CommentPanelProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [username, setUsername] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     fetchComments();
-    
-    // Get username from localStorage
-    const savedUsername = localStorage.getItem('username');
-    if (savedUsername) {
-      setUsername(savedUsername);
-    }
+    checkUser();
   }, [postId]);
+
+  const checkUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
+  };
 
   const fetchComments = async () => {
     const { data, error } = await supabase
       .from('comments')
-      .select('*')
+      .select(`
+        id,
+        user_id,
+        content,
+        created_at,
+        profiles (
+          username,
+          avatar_url
+        )
+      `)
       .eq('post_id', postId)
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setComments(data);
+      setComments(data as Comment[]);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newComment.trim() || !username.trim()) return;
+    if (!newComment.trim() || !user) return;
 
     setIsSubmitting(true);
-
-    // Save username to localStorage
-    localStorage.setItem('username', username);
 
     const { error } = await supabase
       .from('comments')
       .insert({
         post_id: postId,
-        username: username.trim(),
+        user_id: user.id,
         content: newComment.trim(),
       });
 
@@ -121,21 +133,29 @@ export default function CommentPanel({ postId, onClose, onCommentAdded }: Commen
           ) : (
             comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-sm font-semibold">
-                    {comment.username[0].toUpperCase()}
-                  </span>
-                </div>
+                {comment.profiles?.avatar_url ? (
+                  <img 
+                    src={comment.profiles.avatar_url} 
+                    alt="Avatar" 
+                    className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white text-sm font-semibold">
+                      {comment.profiles?.username?.[0]?.toUpperCase() || '?'}
+                    </span>
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-white font-semibold text-sm">
-                      {comment.username}
+                      {comment.profiles?.username || 'Anonymous'}
                     </span>
                     <span className="text-gray-500 text-xs">
                       {formatTimeAgo(comment.created_at)}
                     </span>
                   </div>
-                  <p className="text-gray-300 text-sm leading-relaxed">
+                  <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
                     {comment.content}
                   </p>
                 </div>
@@ -145,37 +165,53 @@ export default function CommentPanel({ postId, onClose, onCommentAdded }: Commen
         </div>
 
         {/* Input Form */}
-        <form onSubmit={handleSubmit} className="p-4 border-t border-gray-800 bg-[#0f1320]">
-          {!username && (
-            <input
-              ref={inputRef}
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Your name..."
-              className="w-full mb-2 px-4 py-2 bg-[#1a1f2e] text-white rounded-full outline-none focus:ring-2 focus:ring-purple-500"
-              maxLength={30}
-            />
-          )}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              className="flex-1 px-4 py-2 bg-[#1a1f2e] text-white rounded-full outline-none focus:ring-2 focus:ring-purple-500"
-              maxLength={500}
-              disabled={isSubmitting}
-            />
+        {user ? (
+          <form onSubmit={handleSubmit} className="p-4 border-t border-gray-800 bg-[#0f1320]">
+            <div className="flex gap-2">
+              <textarea
+                ref={inputRef}
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                className="flex-1 px-4 py-2 bg-[#1a1f2e] text-white rounded-xl outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                maxLength={500}
+                disabled={isSubmitting}
+                rows={1}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                disabled={!newComment.trim() || isSubmitting}
+                className="px-6 py-2 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed self-end"
+              >
+                {isSubmitting ? '...' : 'Post'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Press Enter to post, Shift+Enter for new line
+            </p>
+          </form>
+        ) : (
+          <div className="p-4 border-t border-gray-800 bg-[#0f1320] text-center">
+            <p className="text-gray-400 mb-3">Sign in to leave a comment</p>
             <button
-              type="submit"
-              disabled={!newComment.trim() || !username.trim() || isSubmitting}
-              className="px-6 py-2 bg-purple-600 text-white rounded-full font-semibold hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={onClose}
+              className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-semibold transition"
             >
-              {isSubmitting ? '...' : 'Post'}
+              Sign In
             </button>
           </div>
-        </form>
+        )}
       </div>
     </div>
   );
