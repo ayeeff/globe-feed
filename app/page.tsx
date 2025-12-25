@@ -1,4 +1,4 @@
-// app/page.tsx - WITH AUTHENTICATION AND VIEW TRACKING
+// app/page.tsx - HORIZONTAL SCROLL WITH AUTHENTICATION AND VIEW TRACKING
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -186,7 +186,7 @@ function FeedContent() {
             
             setTimeout(() => {
               if (containerRef.current?.children[index]) {
-                containerRef.current.children[index].scrollIntoView({ behavior: 'auto' });
+                containerRef.current.children[index].scrollIntoView({ behavior: 'auto', inline: 'start' });
                 setTimeout(() => {
                   isProgrammaticScroll.current = false;
                 }, 500);
@@ -208,7 +208,7 @@ function FeedContent() {
     }
   }, [currentIndex, posts]);
 
-  // 3. Update URL when user swipes
+  // 3. Update URL when user navigates
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
@@ -219,34 +219,7 @@ function FeedContent() {
     }
   }, [currentIndex, posts]);
 
-  // 4. Handle Scroll (Swipe Detection)
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      if (isProgrammaticScroll.current) return;
-
-      const scrollTop = container.scrollTop;
-      const windowHeight = window.innerHeight;
-      const newIndex = Math.round(scrollTop / windowHeight);
-      
-      if (newIndex !== currentIndex && newIndex >= 0 && newIndex < posts.length) {
-        setCurrentIndex(newIndex);
-        
-        const indexesToLoad = new Set(loadedIndexes);
-        indexesToLoad.add(newIndex);
-        if (newIndex > 0) indexesToLoad.add(newIndex - 1);
-        if (newIndex < posts.length - 1) indexesToLoad.add(newIndex + 1);
-        setLoadedIndexes(indexesToLoad);
-      }
-    };
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [currentIndex, posts.length, loadedIndexes]);
-
-  // 5. Keyboard Navigation
+  // 4. Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isCommentsOpen || isEmbedOpen) return;
@@ -268,10 +241,19 @@ function FeedContent() {
     if (index < 0 || index >= posts.length) return;
     
     isProgrammaticScroll.current = true;
+    setCurrentIndex(index);
+    
+    // Load adjacent posts
+    const indexesToLoad = new Set(loadedIndexes);
+    indexesToLoad.add(index);
+    if (index > 0) indexesToLoad.add(index - 1);
+    if (index < posts.length - 1) indexesToLoad.add(index + 1);
+    setLoadedIndexes(indexesToLoad);
     
     containerRef.current?.children[index]?.scrollIntoView({ 
       behavior: 'smooth',
-      block: 'start'
+      inline: 'start',
+      block: 'nearest'
     });
 
     setTimeout(() => {
@@ -376,12 +358,12 @@ function FeedContent() {
     <>
       <main 
         ref={containerRef}
-        className="feed-container h-screen w-full bg-black overflow-y-scroll snap-y snap-mandatory scroll-smooth"
+        className="feed-container h-screen w-full bg-black overflow-x-hidden overflow-y-hidden flex"
       >
         {posts.map((post, index) => (
           <div 
             key={post.id} 
-            className="h-screen w-full snap-start snap-always relative"
+            className="h-screen w-screen flex-shrink-0 relative"
           >
             {loadedIndexes.has(index) && index === currentIndex ? (
               <CustomVisual 
@@ -397,7 +379,7 @@ function FeedContent() {
               <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
                 <div className="text-center text-white/50">
                   <div className="text-4xl mb-2">🌍</div>
-                  <p className="text-sm">Swipe to load</p>
+                  <p className="text-sm">Navigate to load</p>
                 </div>
               </div>
             )}
@@ -538,7 +520,7 @@ function FeedContent() {
         />
       )}
       
-      {/* Scroll indicator dots */}
+      {/* Progress indicator dots */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
         {posts.map((_, index) => (
           <div
