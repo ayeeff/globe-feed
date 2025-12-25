@@ -16,6 +16,12 @@ interface Post {
   comments_count: number;
   shares_count: number;
   custom_html: string;
+  category_id: string | null;
+  categories?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
 }
 
 interface Profile {
@@ -31,6 +37,7 @@ export default function GridHomePage() {
   const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -46,6 +53,13 @@ export default function GridHomePage() {
   const [resetSent, setResetSent] = useState(false);
   
   const router = useRouter();
+
+  // Get category from URL parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const categorySlug = params.get('category');
+    setSelectedCategory(categorySlug);
+  }, []);
 
   // Check for authenticated user on mount
   useEffect(() => {
@@ -88,7 +102,14 @@ export default function GridHomePage() {
     async function fetchPosts() {
       const { data, error } = await supabase
         .from('posts')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            slug
+          )
+        `)
         .eq('type', 'custom')
         .order('created_at', { ascending: false });
 
@@ -107,27 +128,43 @@ export default function GridHomePage() {
     fetchPosts();
   }, []);
 
-  // Search functionality
+  // Search and filter functionality
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setPosts(allPosts);
-      return;
+    let filtered = allPosts;
+
+    // Filter by category if selected
+    if (selectedCategory) {
+      filtered = filtered.filter(post => post.categories?.slug === selectedCategory);
     }
 
-    const query = searchQuery.toLowerCase();
-    const filtered = allPosts.filter(post => {
-      return (
-        post.title?.toLowerCase().includes(query) ||
-        post.description?.toLowerCase().includes(query) ||
-        post.custom_html?.toLowerCase().includes(query)
-      );
-    });
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(post => {
+        return (
+          post.title?.toLowerCase().includes(query) ||
+          post.description?.toLowerCase().includes(query) ||
+          post.custom_html?.toLowerCase().includes(query) ||
+          post.categories?.name?.toLowerCase().includes(query)
+        );
+      });
+    }
 
     setPosts(filtered);
-  }, [searchQuery, allPosts]);
+  }, [searchQuery, selectedCategory, allPosts]);
 
   const handleCardClick = (slug: string) => {
     router.push(`/?post=${slug}`);
+  };
+
+  const handleCategoryClick = (categorySlug: string) => {
+    setSelectedCategory(categorySlug);
+    window.history.pushState({}, '', `/home?category=${categorySlug}`);
+  };
+
+  const clearCategoryFilter = () => {
+    setSelectedCategory(null);
+    window.history.pushState({}, '', '/home');
   };
 
   const handleLike = async (e: React.MouseEvent, postId: string) => {
@@ -445,10 +482,32 @@ export default function GridHomePage() {
         </div>
 
         {/* Search Results Info */}
-        {searchQuery && posts.length > 0 && (
+        {(searchQuery || selectedCategory) && posts.length > 0 && (
           <div className="mb-6 text-center">
             <p className="text-gray-400 text-sm">
-              Found <span className="text-white font-semibold">{posts.length}</span> result{posts.length !== 1 ? 's' : ''} for "{searchQuery}"
+              {selectedCategory && (
+                <>
+                  Showing <span className="text-white font-semibold">{posts.length}</span> visualization{posts.length !== 1 ? 's' : ''} in{' '}
+                  <span className="text-purple-400 font-semibold">
+                    {allPosts.find(p => p.categories?.slug === selectedCategory)?.categories?.name || selectedCategory}
+                  </span>
+                  {searchQuery && (
+                    <> matching "{searchQuery}"</>
+                  )}
+                  {' '}
+                  <button
+                    onClick={clearCategoryFilter}
+                    className="text-purple-400 hover:text-purple-300 underline ml-2"
+                  >
+                    Clear filter
+                  </button>
+                </>
+              )}
+              {searchQuery && !selectedCategory && (
+                <>
+                  Found <span className="text-white font-semibold">{posts.length}</span> result{posts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                </>
+              )}
             </p>
           </div>
         )}
@@ -493,6 +552,19 @@ export default function GridHomePage() {
 
                 {/* Content */}
                 <div className="p-4">
+                  {/* Category Tag */}
+                  {post.categories && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCategoryClick(post.categories!.slug);
+                      }}
+                      className="inline-block mb-2 px-3 py-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 rounded-full text-xs font-semibold transition"
+                    >
+                      {post.categories.name}
+                    </button>
+                  )}
+
                   {/* Title */}
                   <h3 className="text-white font-semibold text-lg mb-2 line-clamp-2 group-hover:text-purple-400 transition-colors">
                     {post.title}
@@ -537,20 +609,25 @@ export default function GridHomePage() {
               {searchQuery ? '🔍' : '🌍'}
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">
-              {searchQuery ? 'No Results Found' : 'No Visualizations Yet'}
+              {searchQuery ? 'No Results Found' : selectedCategory ? 'No Visualizations in This Category' : 'No Visualizations Yet'}
             </h2>
             <p className="text-gray-400 mb-6">
               {searchQuery 
                 ? `No visualizations match "${searchQuery}". Try different keywords.`
+                : selectedCategory
+                ? `No visualizations found in this category yet.`
                 : 'Check back soon for interactive globe visualizations!'
               }
             </p>
-            {searchQuery && (
+            {(searchQuery || selectedCategory) && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  clearCategoryFilter();
+                }}
                 className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition"
               >
-                Clear Search
+                Clear Filters
               </button>
             )}
           </div>
