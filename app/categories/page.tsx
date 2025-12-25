@@ -1,4 +1,4 @@
-// app/categories/page.tsx - Category Analytics Dashboard
+// app/categories/page.tsx - Category Analytics Dashboard with Home Links
 "use client";
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
@@ -87,6 +87,10 @@ export default function CategoriesPage() {
     return num.toString();
   };
 
+  const handleCategoryClick = (categorySlug: string) => {
+    router.push(`/home?category=${categorySlug}`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -172,15 +176,18 @@ export default function CategoriesPage() {
           {categories.map((category) => (
             <div
               key={category.id}
-              onClick={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
-              className={`cursor-pointer bg-white/5 backdrop-blur-sm rounded-xl p-6 border transition-all hover:scale-105 ${
-                selectedCategory === category.id 
-                  ? 'border-purple-500 shadow-lg shadow-purple-500/20' 
-                  : 'border-white/10 hover:border-purple-500/50'
-              }`}
+              className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 transition-all hover:scale-105 hover:border-purple-500/50"
             >
               <div className="mb-4">
-                <h3 className="text-xl font-bold mb-1">{category.name}</h3>
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-xl font-bold flex-1">{category.name}</h3>
+                  <button
+                    onClick={() => handleCategoryClick(category.slug)}
+                    className="px-3 py-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 rounded-full text-xs font-semibold transition"
+                  >
+                    View All
+                  </button>
+                </div>
                 <p className="text-sm text-gray-400">{category.description}</p>
               </div>
 
@@ -219,6 +226,14 @@ export default function CategoriesPage() {
                   {totalViews > 0 ? ((category.total_views / totalViews * 100).toFixed(1)) : 0}% of total views
                 </p>
               </div>
+
+              {/* Expand Button */}
+              <button
+                onClick={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
+                className="w-full mt-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm font-semibold transition"
+              >
+                {selectedCategory === category.id ? 'Hide Posts ▲' : 'Show Posts ▼'}
+              </button>
             </div>
           ))}
         </div>
