@@ -15,6 +15,7 @@ interface Post {
   likes_count: number;
   comments_count: number;
   shares_count: number;
+  views_count: number;
   custom_html: string;
   category_id: string | null;
   categories?: {
@@ -38,6 +39,7 @@ export default function GridHomePage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'date' | 'views' | 'likes' | 'category'>('date');
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -128,9 +130,9 @@ export default function GridHomePage() {
     fetchPosts();
   }, []);
 
-  // Search and filter functionality
+  // Search, Filter, and Sort functionality
   useEffect(() => {
-    let filtered = allPosts;
+    let filtered = [...allPosts];
 
     // Filter by category if selected
     if (selectedCategory) {
@@ -150,8 +152,28 @@ export default function GridHomePage() {
       });
     }
 
+    // Apply Sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'views':
+          return (b.views_count || 0) - (a.views_count || 0);
+        case 'likes':
+          return (b.likes_count || 0) - (a.likes_count || 0);
+        case 'category':
+          // Sort by category name if available, else ID, push nulls to end
+          const catA = a.categories?.name || a.category_id || '';
+          const catB = b.categories?.name || b.category_id || '';
+          if (!catA) return 1;
+          if (!catB) return -1;
+          return catA.localeCompare(catB);
+        case 'date':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
+
     setPosts(filtered);
-  }, [searchQuery, selectedCategory, allPosts]);
+  }, [searchQuery, selectedCategory, allPosts, sortBy]);
 
   const handleCardClick = (e: React.MouseEvent, slug: string) => {
     (e.ctrlKey || e.metaKey || e.button === 1) ? window.open(`/?post=${slug}`, '_blank') : router.push(`/?post=${slug}`);
@@ -481,6 +503,55 @@ export default function GridHomePage() {
           </div>
         </div>
 
+        {/* Sorting Controls */}
+        <div className="flex flex-wrap items-center gap-4 mb-8 bg-white/5 backdrop-blur-sm rounded-xl p-2 border border-white/10 w-fit">
+          <span className="text-gray-400 text-sm font-medium px-2">Sort by:</span>
+          
+          <button
+            onClick={() => setSortBy('date')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${
+              sortBy === 'date' 
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            🕒 Newest
+          </button>
+
+          <button
+            onClick={() => setSortBy('views')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${
+              sortBy === 'views' 
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            👁️ Views
+          </button>
+
+          <button
+            onClick={() => setSortBy('likes')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${
+              sortBy === 'likes' 
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            ❤️ Most Liked
+          </button>
+
+          <button
+            onClick={() => setSortBy('category')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${
+              sortBy === 'category' 
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            📂 Category
+          </button>
+        </div>
+
         {/* Search Results Info */}
         {(searchQuery || selectedCategory) && posts.length > 0 && (
           <div className="mb-6 text-center">
@@ -594,6 +665,10 @@ export default function GridHomePage() {
                       </button>
                       <span className="flex items-center gap-1">
                         💬 {post.comments_count || 0}
+                      </span>
+                      {/* Added Views Count display here since we added it to interface */}
+                      <span className="flex items-center gap-1">
+                        👁️ {post.views_count || 0}
                       </span>
                     </div>
                     <span>
