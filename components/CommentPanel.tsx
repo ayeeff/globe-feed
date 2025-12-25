@@ -46,7 +46,7 @@ export default function CommentPanel({ postId, onClose, onCommentAdded }: Commen
         user_id,
         content,
         created_at,
-        profiles!inner (
+        profiles (
           username,
           avatar_url
         )
@@ -55,7 +55,14 @@ export default function CommentPanel({ postId, onClose, onCommentAdded }: Commen
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setComments(data as Comment[]);
+      // Transform the data to match our Comment interface
+      const transformedData = data.map(comment => ({
+        ...comment,
+        profiles: Array.isArray(comment.profiles) && comment.profiles.length > 0 
+          ? comment.profiles[0] 
+          : null
+      }));
+      setComments(transformedData as Comment[]);
     }
   };
 
