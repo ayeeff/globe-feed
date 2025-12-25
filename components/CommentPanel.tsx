@@ -1,4 +1,4 @@
-// components/CommentPanel.tsx - WITH AUTHENTICATION
+// components/CommentPanel.tsx - FIXED TYPE ERROR
 "use client";
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -18,7 +18,7 @@ interface Comment {
   profiles: {
     username: string | null;
     avatar_url: string | null;
-  };
+  } | null;
 }
 
 export default function CommentPanel({ postId, onClose, onCommentAdded }: CommentPanelProps) {
@@ -46,7 +46,7 @@ export default function CommentPanel({ postId, onClose, onCommentAdded }: Commen
         user_id,
         content,
         created_at,
-        profiles (
+        profiles!inner (
           username,
           avatar_url
         )
