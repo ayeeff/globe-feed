@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import CustomVisual from '../components/CustomVisual';
 import CommentPanel from '../components/CommentPanel';
 import { User } from '@supabase/supabase-js';
+import Script from 'next/script';
 
 // --- Embed Modal Component ---
 function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
@@ -356,6 +357,9 @@ function FeedContent() {
 
   return (
     <>
+      <Script src="https://cdn.tailwindcss.com" />
+      <Script src="//unpkg.com/globe.gl" />
+
       <main 
         ref={containerRef}
         className="feed-container h-screen w-full bg-black overflow-x-hidden overflow-y-hidden flex"
