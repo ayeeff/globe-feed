@@ -357,9 +357,6 @@ function FeedContent() {
 
   return (
     <>
-      <Script src="https://cdn.tailwindcss.com" />
-      <Script src="//unpkg.com/globe.gl" />
-
       <main 
         ref={containerRef}
         className="feed-container h-screen w-full bg-black overflow-x-hidden overflow-y-hidden flex"
@@ -551,6 +548,20 @@ export default function Home() {
         </div>
       </div>
     }>
+      {/* GLOBAL SCRIPTS INJECTED HERE (HEAD) */}
+      <Script 
+        src="//unpkg.com/three@0.150.0/build/three.min.js" 
+        strategy="beforeInteractive" 
+      />
+      <Script 
+        src="//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js" 
+        strategy="beforeInteractive" 
+      />
+      <Script 
+        src="https://cdn.tailwindcss.com" 
+        strategy="beforeInteractive" 
+      />
+
       <FeedContent />
     </Suspense>
   );
