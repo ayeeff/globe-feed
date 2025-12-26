@@ -154,6 +154,7 @@ function FeedContent() {
     if (hasInitialLoadHappened.current) return;
 
     async function fetchPosts() {
+      // Filter specifically for the supported types
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -164,7 +165,7 @@ function FeedContent() {
             slug
           )
         `)
-        .eq('type', 'custom')
+        .in('type', ['custom', 'cesium', 'globe', 'leaflet'])
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -341,6 +342,12 @@ function FeedContent() {
     setIsCommentsOpen(true);
   };
 
+  // --- Smart Resource Loading Logic ---
+  const hasCesiumPosts = posts.some(p => p.type === 'cesium');
+  const hasLeafletPosts = posts.some(p => p.type === 'leaflet');
+  // 'custom' and 'globe' types usually both require the Globe.gl/Three.js stack
+  const hasGlobePosts = posts.some(p => p.type === 'globe' || p.type === 'custom');
+
   if (posts.length === 0) {
     return (
       <div className="h-screen w-full bg-black flex items-center justify-center text-white">
@@ -357,6 +364,40 @@ function FeedContent() {
 
   return (
     <>
+      {/* RESOURCE LOADING 
+          Scripts are conditionally loaded based on the types of posts present in the feed.
+      */}
+
+      {/* 1. Globe.gl / Three.js Stack (for 'globe' or 'custom' types) */}
+      {hasGlobePosts && (
+        <>
+          <Script src="//unpkg.com/three@0.150.0/build/three.min.js" strategy="lazyOnload" />
+          <Script src="//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js" strategy="lazyOnload" />
+          <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
+          <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
+          <Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" />
+        </>
+      )}
+
+      {/* 2. Leaflet Stack (for 'leaflet' type) */}
+      {hasLeafletPosts && (
+        <>
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossOrigin="" />
+          <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="lazyOnload" crossOrigin="" />
+        </>
+      )}
+
+      {/* 3. Cesium Stack (for 'cesium' type) */}
+      {hasCesiumPosts && (
+        <>
+          <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+          <Script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js" strategy="lazyOnload" />
+        </>
+      )}
+
+      {/* Tailwind via CDN (Dev/Prototyping) */}
+      <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
+
       <main 
         ref={containerRef}
         className="feed-container h-screen w-full bg-black overflow-x-hidden overflow-y-hidden flex"
@@ -369,6 +410,7 @@ function FeedContent() {
             {loadedIndexes.has(index) && index === currentIndex ? (
               <CustomVisual 
                 key={post.id}
+                type={post.type} // Pass the type so CustomVisual knows what to render
                 css={post.custom_css} 
                 html={post.custom_html} 
                 scriptContent={post.custom_script}
@@ -548,32 +590,6 @@ export default function Home() {
         </div>
       </div>
     }>
-      {/* GLOBAL SCRIPTS INJECTED HERE (HEAD) */}
-      <Script 
-        src="//unpkg.com/three@0.150.0/build/three.min.js" 
-        strategy="beforeInteractive" 
-      />
-      <Script 
-        src="//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js" 
-        strategy="beforeInteractive" 
-      />
-      <Script 
-        src="//unpkg.com/d3-scale" 
-        strategy="beforeInteractive" 
-      />
-      <Script 
-        src="//unpkg.com/d3-interpolate" 
-        strategy="beforeInteractive" 
-      />
-      <Script 
-        src="//unpkg.com/topojson-client@3" 
-        strategy="beforeInteractive" 
-      />
-      <Script 
-        src="https://cdn.tailwindcss.com" 
-        strategy="beforeInteractive" 
-      />
-
       <FeedContent />
     </Suspense>
   );
