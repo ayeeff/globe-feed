@@ -558,6 +558,14 @@ export default function Home() {
         strategy="beforeInteractive" 
       />
       <Script 
+        src="//unpkg.com/d3-scale" 
+        strategy="beforeInteractive" 
+      />
+      <Script 
+        src="//unpkg.com/d3-interpolate" 
+        strategy="beforeInteractive" 
+      />
+      <Script 
         src="https://cdn.tailwindcss.com" 
         strategy="beforeInteractive" 
       />
