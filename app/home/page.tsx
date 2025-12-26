@@ -18,6 +18,7 @@ interface Post {
   views_count: number;
   custom_html: string;
   category_id: string | null;
+  externalurl: string | null; // Added this field
   categories?: {
     id: string;
     name: string;
@@ -112,7 +113,9 @@ export default function GridHomePage() {
             slug
           )
         `)
-        .eq('type', 'custom')
+        // Note: Make sure your external link posts are marked as 'custom' 
+        // or remove this filter if they have a different type.
+        .eq('type', 'custom') 
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -175,8 +178,16 @@ export default function GridHomePage() {
     setPosts(filtered);
   }, [searchQuery, selectedCategory, allPosts, sortBy]);
 
-  const handleCardClick = (e: React.MouseEvent, slug: string) => {
-    (e.ctrlKey || e.metaKey || e.button === 1) ? window.open(`/?post=${slug}`, '_blank') : router.push(`/?post=${slug}`);
+  // Updated logic to handle external URLs
+  const handleCardClick = (e: React.MouseEvent, post: Post) => {
+    // If it has an external URL, open it in a new tab immediately
+    if (post.externalurl) {
+        window.open(post.externalurl, '_blank');
+        return;
+    }
+
+    // Otherwise standard behavior
+    (e.ctrlKey || e.metaKey || e.button === 1) ? window.open(`/?post=${post.slug}`, '_blank') : router.push(`/?post=${post.slug}`);
   };
 
   const handleCategoryClick = (categorySlug: string) => {
@@ -588,12 +599,12 @@ export default function GridHomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              onClick={(e) => handleCardClick(e, post.slug)}
+              onClick={(e) => handleCardClick(e, post)}
               onMouseDown={(e) => {
                 // Handle middle-click
                 if (e.button === 1) {
                   e.preventDefault();
-                  handleCardClick(e, post.slug);
+                  handleCardClick(e, post);
                 }
               }}
               className="group cursor-pointer"
@@ -617,15 +628,21 @@ export default function GridHomePage() {
                   {/* Overlay on Hover */}
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                     <div className="text-white text-center">
-                      <div className="text-4xl mb-2">▶️</div>
-                      <div className="text-sm font-semibold">View Visualization</div>
-                      <div className="text-xs text-gray-300 mt-1">Ctrl+Click for new tab</div>
+                      <div className="text-4xl mb-2">
+                        {post.externalurl ? '🔗' : '▶️'}
+                      </div>
+                      <div className="text-sm font-semibold">
+                        {post.externalurl ? 'Visit Link' : 'View Visualization'}
+                      </div>
+                      <div className="text-xs text-gray-300 mt-1">
+                        {post.externalurl ? 'Opens in new tab' : 'Ctrl+Click for new tab'}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Duration Badge */}
+                  {/* Duration/Type Badge */}
                   <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-white text-xs font-semibold">
-                    Interactive
+                    {post.externalurl ? 'External Link' : 'Interactive'}
                   </div>
                 </div>
 
