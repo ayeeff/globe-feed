@@ -566,6 +566,10 @@ export default function Home() {
         strategy="beforeInteractive" 
       />
       <Script 
+        src="//unpkg.com/topojson-client@3" 
+        strategy="beforeInteractive" 
+      />
+      <Script 
         src="https://cdn.tailwindcss.com" 
         strategy="beforeInteractive" 
       />
