@@ -1,4 +1,4 @@
-// app/page.tsx - HORIZONTAL SCROLL WITH AUTHENTICATION AND VIEW TRACKING
+// app/page.tsx - HORIZONTAL SCROLL WITH ERROR REPORTING
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -7,6 +7,169 @@ import CustomVisual from '../components/CustomVisual';
 import CommentPanel from '../components/CommentPanel';
 import { User } from '@supabase/supabase-js';
 import Script from 'next/script';
+
+// --- Error Report Modal Component ---
+function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  // Auto-populate subject with post title and URL
+  useEffect(() => {
+    if (post) {
+      const url = typeof window !== 'undefined' ? `${window.location.origin}/?post=${post.slug}` : '';
+      setSubject(`Error Report: ${post.title} - ${url}`);
+    }
+  }, [post]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Insert error report into database
+      const { data: reportData, error } = await supabase
+        .from('error_reports')
+        .insert({
+          post_id: post.id,
+          name: name.trim(),
+          email: email.trim(),
+          subject: subject.trim(),
+          description: description.trim(),
+          url: `${window.location.origin}/?post=${post.slug}`,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error submitting report:', error);
+        alert('Failed to submit error report. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Send email notification via API route
+      const emailResponse = await fetch('/api/send-error-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reportId: reportData.id,
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        console.error('Failed to send email notification');
+        // Don't show error to user - report is still saved
+      }
+
+      setSubmitted(true);
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      alert('An unexpected error occurred. Please try again.');
+    }
+
+    setIsSubmitting(false);
+  };
+
+  if (submitted) {
+    return (
+      <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-8 max-w-md w-full shadow-2xl text-center">
+          <div className="text-6xl mb-4">✅</div>
+          <h3 className="text-white text-2xl font-bold mb-2">Report Submitted!</h3>
+          <p className="text-gray-400">Thank you for helping us improve.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div 
+        className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto" 
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div className="mb-6">
+          <div className="text-4xl mb-3">🐛</div>
+          <h3 className="text-white text-2xl font-bold mb-2">Report an Error</h3>
+          <p className="text-gray-400 text-sm">Help us fix issues with this visualization</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Your Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
+              placeholder="Enter your name"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Email Address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
+              placeholder="your@email.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Subject</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
+              placeholder="Brief description of the issue"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition resize-none"
+              placeholder="Please describe the error or issue you encountered..."
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit Error Report'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // --- Embed Modal Component ---
 function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
@@ -77,14 +240,13 @@ function FeedContent() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isEmbedOpen, setIsEmbedOpen] = useState(false);
+  const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
   const [user, setUser] = useState<User | null>(null);
   const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
   
-  // Track which posts have been viewed in this session
   const viewedPostsRef = useRef<Set<string>>(new Set());
   
-  // REFS
   const containerRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScroll = useRef(false);
   const hasInitialLoadHappened = useRef(false);
@@ -92,7 +254,6 @@ function FeedContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Check for authenticated user
   useEffect(() => {
     checkUser();
     
@@ -128,7 +289,6 @@ function FeedContent() {
     }
   };
 
-  // Function to increment view count
   const incrementViewCount = async (postId: string) => {
     if (viewedPostsRef.current.has(postId)) return;
     
@@ -142,19 +302,16 @@ function FeedContent() {
         setPosts(prev => prev.map(p => 
           p.id === postId ? { ...p, views_count: (p.views_count || 0) + 1 } : p
         ));
-        console.log('📊 View counted for post:', postId);
       }
     } catch (error) {
       console.error('Error calling increment_views_count:', error);
     }
   };
 
-  // 1. Fetch Posts & Handle Initial Deep Link
   useEffect(() => {
     if (hasInitialLoadHappened.current) return;
 
     async function fetchPosts() {
-      // Filter specifically for the supported types
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -203,14 +360,12 @@ function FeedContent() {
     fetchPosts();
   }, []); 
 
-  // 2. Track view when currentIndex changes
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       incrementViewCount(posts[currentIndex].id);
     }
   }, [currentIndex, posts]);
 
-  // 3. Update URL when user navigates
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
@@ -221,10 +376,9 @@ function FeedContent() {
     }
   }, [currentIndex, posts]);
 
-  // 4. Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCommentsOpen || isEmbedOpen) return;
+      if (isCommentsOpen || isEmbedOpen || isErrorReportOpen) return;
       
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -237,7 +391,7 @@ function FeedContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, posts.length, isCommentsOpen, isEmbedOpen]);
+  }, [currentIndex, posts.length, isCommentsOpen, isEmbedOpen, isErrorReportOpen]);
 
   const navigateToPost = (index: number) => {
     if (index < 0 || index >= posts.length) return;
@@ -245,7 +399,6 @@ function FeedContent() {
     isProgrammaticScroll.current = true;
     setCurrentIndex(index);
     
-    // Load adjacent posts
     const indexesToLoad = new Set(loadedIndexes);
     indexesToLoad.add(index);
     if (index > 0) indexesToLoad.add(index - 1);
@@ -292,7 +445,6 @@ function FeedContent() {
 
     try {
       if (isLiked) {
-        // Unlike
         await supabase
           .from('interactions')
           .delete()
@@ -312,7 +464,6 @@ function FeedContent() {
           i === currentIndex ? { ...p, likes_count: Math.max(0, (p.likes_count || 0) - 1) } : p
         ));
       } else {
-        // Like
         await supabase
           .from('interactions')
           .insert({
@@ -342,10 +493,8 @@ function FeedContent() {
     setIsCommentsOpen(true);
   };
 
-  // --- Smart Resource Loading Logic ---
   const hasCesiumPosts = posts.some(p => p.type === 'cesium');
   const hasLeafletPosts = posts.some(p => p.type === 'leaflet');
-  // 'custom' and 'globe' types usually both require the Globe.gl/Three.js stack
   const hasGlobePosts = posts.some(p => p.type === 'globe' || p.type === 'custom');
 
   if (posts.length === 0) {
@@ -364,11 +513,6 @@ function FeedContent() {
 
   return (
     <>
-      {/* RESOURCE LOADING 
-          Scripts are conditionally loaded based on the types of posts present in the feed.
-      */}
-
-      {/* 1. Globe.gl / Three.js Stack (for 'globe' or 'custom' types) */}
       {hasGlobePosts && (
         <>
           <Script src="//unpkg.com/three@0.150.0/build/three.min.js" strategy="lazyOnload" />
@@ -379,7 +523,6 @@ function FeedContent() {
         </>
       )}
 
-      {/* 2. Leaflet Stack (for 'leaflet' type) */}
       {hasLeafletPosts && (
         <>
           <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossOrigin="" />
@@ -387,7 +530,6 @@ function FeedContent() {
         </>
       )}
 
-      {/* 3. Cesium Stack (for 'cesium' type) */}
       {hasCesiumPosts && (
         <>
           <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
@@ -395,7 +537,6 @@ function FeedContent() {
         </>
       )}
 
-      {/* Tailwind via CDN (Dev/Prototyping) */}
       <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
 
       <main 
@@ -410,7 +551,7 @@ function FeedContent() {
             {loadedIndexes.has(index) && index === currentIndex ? (
               <CustomVisual 
                 key={post.id}
-                type={post.type} // Pass the type so CustomVisual knows what to render
+                type={post.type}
                 css={post.custom_css} 
                 html={post.custom_html} 
                 scriptContent={post.custom_script}
@@ -429,10 +570,8 @@ function FeedContent() {
 
             {index === currentIndex && (
               <>
-                {/* Info Overlay */}
                 <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none">
                   <div className="px-8 max-w-2xl">
-                    {/* Category Tag */}
                     {post.categories && (
                       <button
                         onClick={() => router.push(`/home?category=${post.categories.slug}`)}
@@ -453,7 +592,6 @@ function FeedContent() {
                   </div>
                 </div>
 
-                {/* Bottom Horizontal Button Bar */}
                 <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-6 pointer-events-auto px-4">
                   <button 
                     onClick={handleLike} 
@@ -507,17 +645,16 @@ function FeedContent() {
                     </span>
                   </a>
 
-                  <a href="/sitemap-tree" className="flex flex-col items-center gap-1 group">
+                  <button onClick={() => setIsErrorReportOpen(true)} className="flex flex-col items-center gap-1 group">
                     <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
-                      <span className="text-2xl">🗺️</span>
+                      <span className="text-2xl">🐛</span>
                     </div>
                     <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      Map
+                      Error
                     </span>
-                  </a>
+                  </button>
                 </div>
 
-                {/* Navigation Arrows */}
                 {index < posts.length - 1 && (
                   <button onClick={() => navigateToPost(index + 1)} className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group">
                     <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
@@ -543,7 +680,6 @@ function FeedContent() {
         ))}
       </main>
 
-      {/* MODALS */}
       {isCommentsOpen && posts[currentIndex] && (
         <CommentPanel
           postId={posts[currentIndex].id}
@@ -560,6 +696,13 @@ function FeedContent() {
         <EmbedModal 
           post={posts[currentIndex]} 
           onClose={() => setIsEmbedOpen(false)} 
+        />
+      )}
+
+      {isErrorReportOpen && posts[currentIndex] && (
+        <ErrorReportModal 
+          post={posts[currentIndex]} 
+          onClose={() => setIsErrorReportOpen(false)} 
         />
       )}
       
