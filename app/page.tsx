@@ -366,6 +366,8 @@ function FeedContent() {
     }
   }, [currentIndex, posts]);
 
+  // --- CRITICAL FIX: DATA SYNC HOOK ---
+  // This passes the database config to the window so the SQL script can find it
   useEffect(() => {
     if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
@@ -373,8 +375,20 @@ function FeedContent() {
         const newUrl = `/?post=${slug}`;
         window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
       }
+
+      // EXPOSE CONFIG TO GLOBAL WINDOW
+      // @ts-ignore
+      window.currentPostConfig = posts[currentIndex].config;
+      
+      // If the GlobeViz script is already running and waiting, tell it to init now
+      // @ts-ignore
+      if (window.GlobeVizInit) {
+        // @ts-ignore
+        window.GlobeVizInit();
+      }
     }
   }, [currentIndex, posts]);
+  // ------------------------------------
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -515,7 +529,7 @@ function FeedContent() {
     <>
       {hasGlobePosts && (
         <>
-          <Script src="//unpkg.com/three@0.150.0/build/three.min.js" strategy="lazyOnload" />
+          <Script src="//unpkg.com/three@0.160.0/build/three.min.js" strategy="lazyOnload" />
           <Script src="//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
