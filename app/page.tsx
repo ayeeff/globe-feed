@@ -1,4 +1,4 @@
-// app/page.tsx - COMPLETE WITH GC IMPROVEMENTS
+// app/page.tsx - Optimized with Garbage Collection & Script Sync
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -8,7 +8,19 @@ import CommentPanel from '../components/CommentPanel';
 import { User } from '@supabase/supabase-js';
 import Script from 'next/script';
 
+// 1. Script tracking
 const loadedScripts = new Set<string>();
+
+// TypeScript declaration for global window properties
+declare global {
+  interface Window {
+    THREE: any;
+    Globe: any;
+    currentPostConfig: any;
+    GlobeVizInit: () => void;
+    globeInstance: any;
+  }
+}
 
 function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void }) {
   const [name, setName] = useState('');
@@ -29,27 +41,113 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const { data: reportData, error } = await supabase.from('error_reports').insert({ post_id: post.id, name: name.trim(), email: email.trim(), subject: subject.trim(), description: description.trim(), url: `${window.location.origin}/?post=${post.slug}` }).select().single();
-      if (error) { console.error('Error submitting report:', error); alert('Failed to submit error report. Please try again.'); setIsSubmitting(false); return; }
-      await fetch('/api/send-error-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reportId: reportData.id }) });
+      const { data: reportData, error } = await supabase.from('error_reports').insert({ 
+        post_id: post.id, 
+        name: name.trim(), 
+        email: email.trim(), 
+        subject: subject.trim(), 
+        description: description.trim(), 
+        url: `${window.location.origin}/?post=${post.slug}` 
+      }).select().single();
+      
+      if (error) throw error;
+      
+      await fetch('/api/send-error-report', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ reportId: reportData.id }) 
+      });
+      
       setSubmitted(true);
       setTimeout(() => onClose(), 2000);
-    } catch (err) { console.error('Unexpected error:', err); alert('An unexpected error occurred. Please try again.'); }
-    setIsSubmitting(false);
+    } catch (err) { 
+      console.error('Error:', err); 
+      alert('Failed to submit report. Please try again.'); 
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  if (submitted) return (<div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}><div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-8 max-w-md w-full shadow-2xl text-center"><div className="text-6xl mb-4">✅</div><h3 className="text-white text-2xl font-bold mb-2">Report Submitted!</h3><p className="text-gray-400">Thank you for helping us improve.</p></div></div>);
+  if (submitted) return (
+    <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-8 max-w-md w-full shadow-2xl text-center">
+        <div className="text-6xl mb-4">✅</div>
+        <h3 className="text-white text-2xl font-bold mb-2">Report Submitted!</h3>
+        <p className="text-gray-400">Thank you for helping us improve.</p>
+      </div>
+    </div>
+  );
 
-  return (<div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}><div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}><button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button><div className="mb-6"><div className="text-4xl mb-3">🐛</div><h3 className="text-white text-2xl font-bold mb-2">Report an Error</h3><p className="text-gray-400 text-sm">Help us fix issues with this visualization</p></div><form onSubmit={handleSubmit} className="space-y-4"><div><label className="block text-white text-sm font-medium mb-2">Your Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" placeholder="Enter your name" required /></div><div><label className="block text-white text-sm font-medium mb-2">Email Address</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" placeholder="your@email.com" required /></div><div><label className="block text-white text-sm font-medium mb-2">Subject</label><input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" placeholder="Brief description of the issue" required /></div><div><label className="block text-white text-sm font-medium mb-2">Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition resize-none" placeholder="Please describe the error or issue you encountered..." required /></div><button type="submit" disabled={isSubmitting} className="w-full py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed">{isSubmitting ? 'Submitting...' : 'Submit Error Report'}</button></form></div></div>);
+  return (
+    <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <div className="mb-6">
+          <div className="text-4xl mb-3">🐛</div>
+          <h3 className="text-white text-2xl font-bold mb-2">Report an Error</h3>
+          <p className="text-gray-400 text-sm">Help us fix issues with this visualization</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Your Name</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" placeholder="Enter your name" required />
+          </div>
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Email Address</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" placeholder="your@email.com" required />
+          </div>
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Subject</label>
+            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" placeholder="Brief description of the issue" required />
+          </div>
+          <div>
+            <label className="block text-white text-sm font-medium mb-2">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition resize-none" placeholder="Please describe the error..." required />
+          </div>
+          <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed">
+            {isSubmitting ? 'Submitting...' : 'Submit Error Report'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const embedUrl = typeof window !== 'undefined' ? `${window.location.origin}/embed/${post.slug}` : '';
   const embedCode = `<iframe width="800" height="550" src="${embedUrl}" title="${post.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
-  const handleCopy = () => { navigator.clipboard.writeText(embedCode); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  
+  const handleCopy = () => { 
+    navigator.clipboard.writeText(embedCode); 
+    setCopied(true); 
+    setTimeout(() => setCopied(false), 2000); 
+  };
 
-  return (<div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}><div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative" onClick={e => e.stopPropagation()}><button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button><h3 className="text-white text-xl font-bold mb-4">Embed Visualization</h3><div className="mb-4"><label className="block text-white/60 text-sm mb-2">Embed Code</label><div className="relative"><textarea readOnly value={embedCode} className="w-full h-32 bg-black/50 border border-white/10 rounded-lg p-3 text-white/80 text-sm font-mono resize-none focus:outline-none focus:border-purple-500 transition" onClick={(e) => e.currentTarget.select()} /><button onClick={handleCopy} className="absolute bottom-3 right-3 px-3 py-1.5 bg-white/10 hover:bg-purple-600 text-white text-xs rounded-md transition flex items-center gap-1.5 backdrop-blur-md">{copied ? (<><span>✓</span> Copied</>) : (<><span>📋</span> Copy Code</>)}</button></div></div><div className="flex items-center gap-2 text-xs text-white/40"><span className="w-2 h-2 rounded-full bg-green-500"></span><span>Fixed Size (800x550)</span><span className="mx-1">•</span><span>Interactive</span></div></div></div>);
+  return (
+    <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <h3 className="text-white text-xl font-bold mb-4">Embed Visualization</h3>
+        <div className="mb-4">
+          <label className="block text-white/60 text-sm mb-2">Embed Code</label>
+          <div className="relative">
+            <textarea readOnly value={embedCode} className="w-full h-32 bg-black/50 border border-white/10 rounded-lg p-3 text-white/80 text-sm font-mono resize-none focus:outline-none focus:border-purple-500 transition" onClick={(e) => e.currentTarget.select()} />
+            <button onClick={handleCopy} className="absolute bottom-3 right-3 px-3 py-1.5 bg-white/10 hover:bg-purple-600 text-white text-xs rounded-md transition flex items-center gap-1.5 backdrop-blur-md">
+              {copied ? (<><span>✓</span> Copied</>) : (<><span>📋</span> Copy Code</>)}
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-white/40">
+          <span className="w-2 h-2 rounded-full bg-green-500"></span><span>Fixed Size (800x550)</span><span className="mx-1">•</span><span>Interactive</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function FeedContent() {
@@ -61,17 +159,20 @@ function FeedContent() {
   const [loadedIndexes, setLoadedIndexes] = useState<Set<number>>(new Set([0]));
   const [user, setUser] = useState<User | null>(null);
   const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
+  
+  // 2. GC & Script state
   const [scriptsReady, setScriptsReady] = useState(false);
+  const cleanupFunctionsRef = useRef<Array<() => void>>([]);
   
   const viewedPostsRef = useRef<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScroll = useRef(false);
   const hasInitialLoadHappened = useRef(false);
-  const cleanupFunctionsRef = useRef<Array<() => void>>([]);
   
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // 3. Script load checker
   useEffect(() => {
     const checkScriptsLoaded = () => {
       if (typeof window.THREE !== 'undefined' && typeof window.Globe !== 'undefined') {
@@ -81,13 +182,16 @@ function FeedContent() {
         setTimeout(checkScriptsLoaded, 100);
       }
     };
-    setTimeout(checkScriptsLoaded, 500);
+    checkScriptsLoaded();
   }, []);
 
+  // 4. Global Cleanup Effect
   useEffect(() => {
     return () => {
       console.log('🧹 Running comprehensive cleanup...');
-      cleanupFunctionsRef.current.forEach(cleanup => { try { cleanup(); } catch (err) { console.error('Cleanup error:', err); } });
+      cleanupFunctionsRef.current.forEach(cleanup => { 
+        try { cleanup(); } catch (err) { console.error('Cleanup error:', err); } 
+      });
       cleanupFunctionsRef.current = [];
       if (window.currentPostConfig) delete window.currentPostConfig;
       if (window.GlobeVizInit) delete window.GlobeVizInit;
@@ -119,8 +223,11 @@ function FeedContent() {
     if (viewedPostsRef.current.has(postId)) return;
     try {
       const { error } = await supabase.rpc('increment_views_count', { post_id: postId });
-      if (!error) { viewedPostsRef.current.add(postId); setPosts(prev => prev.map(p => p.id === postId ? { ...p, views_count: (p.views_count || 0) + 1 } : p)); }
-    } catch (error) { console.error('Error calling increment_views_count:', error); }
+      if (!error) { 
+        viewedPostsRef.current.add(postId); 
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, views_count: (p.views_count || 0) + 1 } : p)); 
+      }
+    } catch (error) { console.error('Error incrementing views:', error); }
   };
 
   useEffect(() => {
@@ -139,27 +246,30 @@ function FeedContent() {
             setCurrentIndex(index);
             setLoadedIndexes(new Set([index]));
             incrementViewCount(data[index].id);
-            setTimeout(() => { if (containerRef.current?.children[index]) { containerRef.current.children[index].scrollIntoView({ behavior: 'auto', inline: 'start' }); setTimeout(() => { isProgrammaticScroll.current = false; }, 500); } }, 100);
+            setTimeout(() => { 
+              if (containerRef.current?.children[index]) { 
+                containerRef.current.children[index].scrollIntoView({ behavior: 'auto', inline: 'start' }); 
+                setTimeout(() => { isProgrammaticScroll.current = false; }, 500); 
+              } 
+            }, 100);
           }
         } else if (data.length > 0) { incrementViewCount(data[0].id); }
       }
     }
     fetchPosts();
-  }, []); 
+  }, [searchParams]); 
 
-  useEffect(() => { if (posts.length > 0 && posts[currentIndex]) { incrementViewCount(posts[currentIndex].id); } }, [currentIndex, posts]);
-
-  useEffect(() => {
-    if (posts.length > 0 && posts[currentIndex]) {
+  useEffect(() => { 
+    if (posts.length > 0 && posts[currentIndex]) { 
+      incrementViewCount(posts[currentIndex].id); 
       const slug = posts[currentIndex].slug;
       if (slug) {
         const newUrl = `/?post=${slug}`;
         window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
       }
-      if (window.currentPostConfig) delete window.currentPostConfig;
       window.currentPostConfig = posts[currentIndex].config;
       if (window.GlobeVizInit) { window.GlobeVizInit(); }
-    }
+    } 
   }, [currentIndex, posts]);
 
   useEffect(() => {
@@ -172,11 +282,16 @@ function FeedContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, posts.length, isCommentsOpen, isEmbedOpen, isErrorReportOpen]);
 
+  // 5. Updated navigateToPost with local cleanup
   const navigateToPost = (index: number) => {
     if (index < 0 || index >= posts.length) return;
     console.log('🔄 Navigating - cleaning up previous visualization...');
-    cleanupFunctionsRef.current.forEach(cleanup => { try { cleanup(); } catch (err) { console.error('Navigation cleanup error:', err); } });
+    
+    cleanupFunctionsRef.current.forEach(cleanup => { 
+      try { cleanup(); } catch (err) { console.error('Navigation cleanup error:', err); } 
+    });
     cleanupFunctionsRef.current = [];
+
     setTimeout(() => {
       isProgrammaticScroll.current = true;
       setCurrentIndex(index);
@@ -192,8 +307,12 @@ function FeedContent() {
 
   const handleShare = async () => {
     const url = `${window.location.origin}/?post=${posts[currentIndex].slug}`;
-    if (navigator.share) { try { await navigator.share({ title: posts[currentIndex].title, url: url }); } catch (err) { console.log('Share cancelled'); } } 
-    else { navigator.clipboard.writeText(url); alert('Link copied to clipboard!'); }
+    if (navigator.share) { 
+      try { await navigator.share({ title: posts[currentIndex].title, url: url }); } catch (err) { console.log('Share cancelled'); } 
+    } else { 
+      navigator.clipboard.writeText(url); 
+      alert('Link copied to clipboard!'); 
+    }
   };
 
   const handleLike = async () => {
@@ -221,8 +340,16 @@ function FeedContent() {
   const hasLeafletPosts = posts.some(p => p.type === 'leaflet');
   const hasGlobePosts = posts.some(p => p.type === 'globe' || p.type === 'custom');
 
+  // 6. Updated loading check
   if (posts.length === 0 || !scriptsReady) {
-    return (<div className="h-screen w-full bg-black flex items-center justify-center text-white"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div><p>{posts.length === 0 ? 'Loading visualizations...' : 'Loading libraries...'}</p></div></div>);
+    return (
+      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>{posts.length === 0 ? 'Loading visualizations...' : 'Loading libraries...'}</p>
+        </div>
+      </div>
+    );
   }
 
   const currentPost = posts[currentIndex];
@@ -230,46 +357,156 @@ function FeedContent() {
 
   return (
     <>
-      {hasGlobePosts && (<><Script src="//cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js" strategy="beforeInteractive" onLoad={() => { loadedScripts.add('three'); console.log('✅ THREE.js loaded'); }} onError={() => console.error('❌ THREE.js failed to load')} /><Script src="//cdn.jsdelivr.net/npm/globe.gl@2.37.0/dist/globe.gl.min.js" strategy="lazyOnload" onLoad={() => { loadedScripts.add('globe'); console.log('✅ Globe.GL loaded'); }} onError={() => console.error('❌ Globe.GL failed to load')} /><Script src="//unpkg.com/d3-scale" strategy="lazyOnload" /><Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" /><Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" /></>)}
-      {hasLeafletPosts && (<><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossOrigin="" /><Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="lazyOnload" crossOrigin="" /></>)}
-      {hasCesiumPosts && (<><link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet" /><Script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js" strategy="lazyOnload" /></>)}
-      <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
+      {/* 7. Scripts with onLoad handlers */}
+      {hasGlobePosts && (
+        <>
+          <Script 
+            src="//cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js" 
+            strategy="beforeInteractive" 
+            onLoad={() => { loadedScripts.add('three'); console.log('✅ THREE.js loaded'); }}
+          />
+          <Script 
+            src="//cdn.jsdelivr.net/npm/globe.gl@2.37.0/dist/globe.gl.min.js" 
+            strategy="lazyOnload" 
+            onLoad={() => { loadedScripts.add('globe'); console.log('✅ Globe.GL loaded'); }}
+          />
+          <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
+          <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
+          <Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" />
+        </>
+      )}
+      {hasLeafletPosts && (
+        <>
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossOrigin="" />
+          <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="lazyOnload" crossOrigin="" />
+        </>
+      )}
+      {hasCesiumPosts && (
+        <>
+          <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+          <Script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js" strategy="lazyOnload" />
+        </>
+      )}
 
-      <main ref={containerRef} className="feed-container h-screen w-full bg-black overflow-x-hidden overflow-y-hidden flex">
+      <main ref={containerRef} className="feed-container h-screen w-full bg-black overflow-hidden flex">
         {posts.map((post, index) => (
           <div key={post.id} className="h-screen w-screen flex-shrink-0 relative">
-            {loadedIndexes.has(index) && index === currentIndex ? (<CustomVisual key={`${post.id}-${currentIndex}`} type={post.type} css={post.custom_css} html={post.custom_html} scriptContent={post.custom_script} isActive={true} />) : loadedIndexes.has(index) ? (<div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />) : (<div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center"><div className="text-center text-white/50"><div className="text-4xl mb-2">🌍</div><p className="text-sm">Navigate to load</p></div></div>)}
+            {loadedIndexes.has(index) && index === currentIndex ? (
+              // 8. CustomVisual with dynamic key for GC
+              <CustomVisual 
+                key={`${post.id}-${currentIndex}`} 
+                type={post.type} 
+                css={post.custom_css} 
+                html={post.custom_html} 
+                scriptContent={post.custom_script} 
+                isActive={true} 
+              />
+            ) : loadedIndexes.has(index) ? (
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
+                <div className="text-center text-white/50">
+                  <div className="text-4xl mb-2">🌍</div>
+                  <p className="text-sm">Navigate to load</p>
+                </div>
+              </div>
+            )}
 
             {index === currentIndex && (
               <>
-                <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none"><div className="px-8 max-w-2xl">{post.categories && (<button onClick={() => router.push(`/home?category=${post.categories.slug}`)} className="inline-block mb-3 px-4 py-1.5 bg-purple-500/30 hover:bg-purple-500/40 backdrop-blur-sm border border-purple-500/50 text-purple-200 rounded-full text-sm font-semibold transition pointer-events-auto drop-shadow-lg">{post.categories.name}</button>)}<h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg pointer-events-auto">{post.title}</h2>{post.description && (<p className="text-white/90 text-sm drop-shadow-lg pointer-events-auto">{post.description}</p>)}</div></div>
-
-                <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-6 pointer-events-auto px-4">
-                  <button onClick={handleLike} className={`flex flex-col items-center gap-1 group ${isLiked ? 'scale-110' : ''}`}><div className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border ${isLiked ? 'bg-red-500/30 border-red-500/50' : 'bg-black/50 border-white/10'}`}><span className={`text-2xl ${isLiked ? 'animate-pulse' : ''}`}>❤️</span></div><span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">{post.likes_count || 0}</span></button>
-                  <button onClick={handleCommentClick} className="flex flex-col items-center gap-1 group"><div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">💬</span></div><span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">{post.comments_count || 0}</span></button>
-                  <button onClick={handleShare} className="flex flex-col items-center gap-1 group"><div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">🔗</span></div><span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Share</span></button>
-                  <button onClick={() => setIsEmbedOpen(true)} className="flex flex-col items-center gap-1 group"><div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">📟</span></div><span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Embed</span></button>
-                  <a href="/home" className="flex flex-col items-center gap-1 group"><div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">🏠</span></div><span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Home</span></button>
-                  <button onClick={() => setIsErrorReportOpen(true)} className="flex flex-col items-center gap-1 group"><div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">🐛</span></div><span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Error</span></button>
+                <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none">
+                  <div className="px-8 max-w-2xl">
+                    {post.categories && (
+                      <button onClick={() => router.push(`/home?category=${post.categories.slug}`)} className="inline-block mb-3 px-4 py-1.5 bg-purple-500/30 hover:bg-purple-500/40 backdrop-blur-sm border border-purple-500/50 text-purple-200 rounded-full text-sm font-semibold transition pointer-events-auto drop-shadow-lg">
+                        {post.categories.name}
+                      </button>
+                    )}
+                    <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg pointer-events-auto">{post.title}</h2>
+                    {post.description && (<p className="text-white/90 text-sm drop-shadow-lg pointer-events-auto">{post.description}</p>)}
+                  </div>
                 </div>
 
-                {index < posts.length - 1 && (<button onClick={() => navigateToPost(index + 1)} className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group"><div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110"><svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></div></button>)}
-                {index > 0 && (<button onClick={() => navigateToPost(index - 1)} className="absolute left-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group"><div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110"><svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></div></button>)}
+                <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-6 pointer-events-auto px-4">
+                  <button onClick={handleLike} className={`flex flex-col items-center gap-1 group ${isLiked ? 'scale-110' : ''}`}>
+                    <div className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border ${isLiked ? 'bg-red-500/30 border-red-500/50' : 'bg-black/50 border-white/10'}`}>
+                      <span className={`text-2xl ${isLiked ? 'animate-pulse' : ''}`}>❤️</span>
+                    </div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">{post.likes_count || 0}</span>
+                  </button>
+                  <button onClick={handleCommentClick} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">💬</span></div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">{post.comments_count || 0}</span>
+                  </button>
+                  <button onClick={handleShare} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">🔗</span></div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Share</span>
+                  </button>
+                  <button onClick={() => setIsEmbedOpen(true)} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">📟</span></div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Embed</span>
+                  </button>
+                  <button onClick={() => router.push('/home')} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">🏠</span></div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Home</span>
+                  </button>
+                  <button onClick={() => setIsErrorReportOpen(true)} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10"><span className="text-2xl">🐛</span></div>
+                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">Error</span>
+                  </button>
+                </div>
+
+                {index < posts.length - 1 && (
+                  <button onClick={() => navigateToPost(index + 1)} className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group">
+                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
+                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </div>
+                  </button>
+                )}
+                {index > 0 && (
+                  <button onClick={() => navigateToPost(index - 1)} className="absolute left-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group">
+                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
+                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </div>
+                  </button>
+                )}
               </>
             )}
           </div>
         ))}
       </main>
 
-      {isCommentsOpen && posts[currentIndex] && (<CommentPanel postId={posts[currentIndex].id} onClose={() => setIsCommentsOpen(false)} onCommentAdded={() => { setPosts(prev => prev.map((p, i) => i === currentIndex ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p)); }} />)}
+      {isCommentsOpen && posts[currentIndex] && (
+        <CommentPanel 
+          postId={posts[currentIndex].id} 
+          onClose={() => setIsCommentsOpen(false)} 
+          onCommentAdded={() => { 
+            setPosts(prev => prev.map((p, i) => i === currentIndex ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p)); 
+          }} 
+        />
+      )}
       {isEmbedOpen && posts[currentIndex] && (<EmbedModal post={posts[currentIndex]} onClose={() => setIsEmbedOpen(false)} />)}
       {isErrorReportOpen && posts[currentIndex] && (<ErrorReportModal post={posts[currentIndex]} onClose={() => setIsErrorReportOpen(false)} />)}
       
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">{posts.map((_, index) => (<div key={index} className={`h-1.5 rounded-full transition-all ${index === currentIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/20'}`} />))}</div>
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
+        {posts.map((_, index) => (
+          <div key={index} className={`h-1.5 rounded-full transition-all ${index === currentIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/20'}`} />
+        ))}
+      </div>
     </>
   );
 }
 
 export default function Home() {
-  return (<Suspense fallback={<div className="h-screen w-full bg-black flex items-center justify-center text-white"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div><p>Loading...</p></div></div>}><FeedContent /></Suspense>);
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <FeedContent />
+    </Suspense>
+  );
 }
