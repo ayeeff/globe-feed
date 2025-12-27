@@ -529,16 +529,16 @@ function FeedContent() {
     <>
 {hasGlobePosts && (
         <>
-          {/* Matches package.json "three": "^0.182.0" */}
+          {/* SWITCHED TO JSDELIVR TO FIX MIME TYPE ERROR */}
           <Script 
-            src="//unpkg.com/three@0.182.0/build/three.min.js" 
+            src="//cdn.jsdelivr.net/npm/three@0.182.0/build/three.min.js" 
             strategy="beforeInteractive" 
           />
-          {/* Matches package.json "react-globe.gl": "^2.37.0" */}
           <Script 
-            src="//unpkg.com/globe.gl@2.37.0/dist/globe.gl.min.js" 
+            src="//cdn.jsdelivr.net/npm/globe.gl@2.37.0/dist/globe.gl.min.js" 
             strategy="lazyOnload" 
           />
+          {/* Keep these as they are usually stable, or switch them too if needed */}
           <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
           <Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" />
