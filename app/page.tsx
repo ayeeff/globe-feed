@@ -527,18 +527,18 @@ function FeedContent() {
 
   return (
     <>
-{hasGlobePosts && (
+    {hasGlobePosts && (
         <>
-          {/* SWITCHED TO JSDELIVR TO FIX MIME TYPE ERROR */}
+          {/* DOWNGRADE TO 0.159.0 (Last version with window.THREE support) */}
           <Script 
-            src="//cdn.jsdelivr.net/npm/three@0.182.0/build/three.min.js" 
+            src="//cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js" 
             strategy="beforeInteractive" 
           />
+          {/* globe.gl 2.37.0 is compatible with this version */}
           <Script 
             src="//cdn.jsdelivr.net/npm/globe.gl@2.37.0/dist/globe.gl.min.js" 
             strategy="lazyOnload" 
           />
-          {/* Keep these as they are usually stable, or switch them too if needed */}
           <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
           <Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" />
