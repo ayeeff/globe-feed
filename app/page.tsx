@@ -527,10 +527,18 @@ function FeedContent() {
 
   return (
     <>
-      {hasGlobePosts && (
+{hasGlobePosts && (
         <>
-          <Script src="//unpkg.com/three@0.160.0/build/three.min.js" strategy="lazyOnload" />
-          <Script src="//unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js" strategy="lazyOnload" />
+          {/* Matches package.json "three": "^0.182.0" */}
+          <Script 
+            src="//unpkg.com/three@0.182.0/build/three.min.js" 
+            strategy="beforeInteractive" 
+          />
+          {/* Matches package.json "react-globe.gl": "^2.37.0" */}
+          <Script 
+            src="//unpkg.com/globe.gl@2.37.0/dist/globe.gl.min.js" 
+            strategy="lazyOnload" 
+          />
           <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
           <Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" />
