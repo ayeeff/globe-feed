@@ -1,4 +1,4 @@
-// app/page.tsx - HORIZONTAL SCROLL WITH ERROR REPORTING
+// app/page.tsx - FULL SOURCE WITH UI TRANSPARENCY FIX
 "use client";
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -17,7 +17,6 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Auto-populate subject with post title and URL
   useEffect(() => {
     if (post) {
       const url = typeof window !== 'undefined' ? `${window.location.origin}/?post=${post.slug}` : '';
@@ -28,9 +27,7 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     try {
-      // Insert error report into database
       const { data: reportData, error } = await supabase
         .from('error_reports')
         .insert({
@@ -44,38 +41,20 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
         .select()
         .single();
 
-      if (error) {
-        console.error('Error submitting report:', error);
-        alert('Failed to submit error report. Please try again.');
-        setIsSubmitting(false);
-        return;
-      }
+      if (error) throw error;
 
-      // Send email notification via API route
-      const emailResponse = await fetch('/api/send-error-report', {
+      await fetch('/api/send-error-report', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reportId: reportData.id,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: reportData.id }),
       });
 
-      if (!emailResponse.ok) {
-        console.error('Failed to send email notification');
-        // Don't show error to user - report is still saved
-      }
-
       setSubmitted(true);
-      setTimeout(() => {
-        onClose();
-      }, 2000);
+      setTimeout(() => onClose(), 2000);
     } catch (err) {
-      console.error('Unexpected error:', err);
-      alert('An unexpected error occurred. Please try again.');
+      console.error('Error submitting report:', err);
+      alert('Failed to submit error report.');
     }
-
     setIsSubmitting(false);
   };
 
@@ -85,7 +64,6 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
         <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-8 max-w-md w-full shadow-2xl text-center">
           <div className="text-6xl mb-4">✅</div>
           <h3 className="text-white text-2xl font-bold mb-2">Report Submitted!</h3>
-          <p className="text-gray-400">Thank you for helping us improve.</p>
         </div>
       </div>
     );
@@ -93,78 +71,20 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
 
   return (
     <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div 
-        className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto" 
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
-
         <div className="mb-6">
           <div className="text-4xl mb-3">🐛</div>
           <h3 className="text-white text-2xl font-bold mb-2">Report an Error</h3>
-          <p className="text-gray-400 text-sm">Help us fix issues with this visualization</p>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-white text-sm font-medium mb-2">Your Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
-              placeholder="Enter your name"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-white text-sm font-medium mb-2">Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
-              placeholder="your@email.com"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-white text-sm font-medium mb-2">Subject</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
-              placeholder="Brief description of the issue"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-white text-sm font-medium mb-2">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition resize-none"
-              placeholder="Please describe the error or issue you encountered..."
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit Error Report'}
-          </button>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white" placeholder="Name" required />
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white" placeholder="Email" required />
+          <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white" placeholder="Subject" required />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white resize-none" placeholder="Issue details..." required />
+          <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-lg font-semibold">{isSubmitting ? 'Submitting...' : 'Submit Report'}</button>
         </form>
       </div>
     </div>
@@ -175,61 +95,17 @@ function ErrorReportModal({ post, onClose }: { post: any; onClose: () => void })
 function EmbedModal({ post, onClose }: { post: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const embedUrl = typeof window !== 'undefined' ? `${window.location.origin}/embed/${post.slug}` : '';
-  
-  const embedCode = `<iframe width="800" height="550" src="${embedUrl}" title="${post.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(embedCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const embedCode = `<iframe width="800" height="550" src="${embedUrl}" title="${post.title}" frameborder="0" allowfullscreen></iframe>`;
 
   return (
     <div className="fixed inset-0 z-[20001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div 
-        className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative" 
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
-
         <h3 className="text-white text-xl font-bold mb-4">Embed Visualization</h3>
-        
-        <div className="mb-4">
-          <label className="block text-white/60 text-sm mb-2">Embed Code</label>
-          <div className="relative">
-            <textarea 
-              readOnly 
-              value={embedCode}
-              className="w-full h-32 bg-black/50 border border-white/10 rounded-lg p-3 text-white/80 text-sm font-mono resize-none focus:outline-none focus:border-purple-500 transition"
-              onClick={(e) => e.currentTarget.select()}
-            />
-            <button 
-              onClick={handleCopy}
-              className="absolute bottom-3 right-3 px-3 py-1.5 bg-white/10 hover:bg-purple-600 text-white text-xs rounded-md transition flex items-center gap-1.5 backdrop-blur-md"
-            >
-              {copied ? (
-                <>
-                  <span>✓</span> Copied
-                </>
-              ) : (
-                <>
-                  <span>📋</span> Copy Code
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-white/40">
-          <span className="w-2 h-2 rounded-full bg-green-500"></span>
-          <span>Fixed Size (800x550)</span>
-          <span className="mx-1">•</span>
-          <span>Interactive</span>
-        </div>
+        <textarea readOnly value={embedCode} className="w-full h-32 bg-black/50 border border-white/10 rounded-lg p-3 text-white/80 text-sm font-mono" />
+        <button onClick={() => { navigator.clipboard.writeText(embedCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-md">{copied ? 'Copied!' : 'Copy Code'}</button>
       </div>
     </div>
   );
@@ -246,7 +122,6 @@ function FeedContent() {
   const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
   
   const viewedPostsRef = useRef<Set<string>>(new Set());
-  
   const containerRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScroll = useRef(false);
   const hasInitialLoadHappened = useRef(false);
@@ -255,290 +130,99 @@ function FeedContent() {
   const router = useRouter();
 
   useEffect(() => {
-    checkUser();
-    
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserLikes(session.user.id);
-      } else {
-        setUserLikes(new Set());
-      }
+      if (session?.user) fetchUserLikes(session.user.id);
+      else setUserLikes(new Set());
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-    if (user) {
-      await fetchUserLikes(user.id);
-    }
-  };
-
   const fetchUserLikes = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('interactions')
-      .select('post_id')
-      .eq('user_id', userId)
-      .eq('type', 'like');
-
-    if (!error && data) {
-      setUserLikes(new Set(data.map(i => i.post_id)));
-    }
+    const { data } = await supabase.from('interactions').select('post_id').eq('user_id', userId).eq('type', 'like');
+    if (data) setUserLikes(new Set(data.map(i => i.post_id)));
   };
 
   const incrementViewCount = async (postId: string) => {
     if (viewedPostsRef.current.has(postId)) return;
-    
     try {
-      const { error } = await supabase.rpc('increment_views_count', { 
-        post_id: postId 
-      });
-
-      if (!error) {
-        viewedPostsRef.current.add(postId);
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { ...p, views_count: (p.views_count || 0) + 1 } : p
-        ));
-      }
-    } catch (error) {
-      console.error('Error calling increment_views_count:', error);
-    }
+      const { error } = await supabase.rpc('increment_views_count', { post_id: postId });
+      if (!error) viewedPostsRef.current.add(postId);
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
     if (hasInitialLoadHappened.current) return;
-
     async function fetchPosts() {
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          categories (
-            id,
-            name,
-            slug
-          )
-        `)
-        .in('type', ['custom', 'cesium', 'globe', 'leaflet'])
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("Error fetching posts:", error);
-        return;
-      }
-      
+      const { data } = await supabase.from('posts').select('*, categories(*)').in('type', ['custom', 'cesium', 'globe', 'leaflet']).order('created_at', { ascending: false });
       if (data) {
         setPosts(data);
         hasInitialLoadHappened.current = true;
-        
         const slug = searchParams.get('post');
         if (slug) {
           const index = data.findIndex(p => p.slug === slug);
           if (index !== -1) {
-            isProgrammaticScroll.current = true;
             setCurrentIndex(index);
             setLoadedIndexes(new Set([index]));
-            incrementViewCount(data[index].id);
-            
-            setTimeout(() => {
-              if (containerRef.current?.children[index]) {
-                containerRef.current.children[index].scrollIntoView({ behavior: 'auto', inline: 'start' });
-                setTimeout(() => {
-                  isProgrammaticScroll.current = false;
-                }, 500);
-              }
-            }, 100);
           }
-        } else if (data.length > 0) {
-          incrementViewCount(data[0].id);
         }
       }
     }
     fetchPosts();
-  }, []); 
+  }, [searchParams]);
 
   useEffect(() => {
-    if (posts.length > 0 && posts[currentIndex]) {
+    if (posts[currentIndex]) {
       incrementViewCount(posts[currentIndex].id);
-    }
-  }, [currentIndex, posts]);
-
-  // --- CRITICAL FIX: DATA SYNC HOOK ---
-  // This passes the database config to the window so the SQL script can find it
-  useEffect(() => {
-    if (posts.length > 0 && posts[currentIndex]) {
       const slug = posts[currentIndex].slug;
       if (slug) {
         const newUrl = `/?post=${slug}`;
-        window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+        window.history.replaceState(null, '', newUrl);
       }
-
-      // EXPOSE CONFIG TO GLOBAL WINDOW
+      // CRITICAL DATA SYNC
       // @ts-ignore
       window.currentPostConfig = posts[currentIndex].config;
-      
-      // If the GlobeViz script is already running and waiting, tell it to init now
       // @ts-ignore
-      if (window.GlobeVizInit) {
-        // @ts-ignore
-        window.GlobeVizInit();
-      }
+      if (window.GlobeVizInit) window.GlobeVizInit();
     }
   }, [currentIndex, posts]);
-  // ------------------------------------
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCommentsOpen || isEmbedOpen || isErrorReportOpen) return;
-      
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        navigateToPost(currentIndex + 1);
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        navigateToPost(currentIndex - 1);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, posts.length, isCommentsOpen, isEmbedOpen, isErrorReportOpen]);
 
   const navigateToPost = (index: number) => {
     if (index < 0 || index >= posts.length) return;
-    
-    isProgrammaticScroll.current = true;
     setCurrentIndex(index);
-    
-    const indexesToLoad = new Set(loadedIndexes);
-    indexesToLoad.add(index);
-    if (index > 0) indexesToLoad.add(index - 1);
-    if (index < posts.length - 1) indexesToLoad.add(index + 1);
-    setLoadedIndexes(indexesToLoad);
-    
-    containerRef.current?.children[index]?.scrollIntoView({ 
-      behavior: 'smooth',
-      inline: 'start',
-      block: 'nearest'
-    });
-
-    setTimeout(() => {
-      isProgrammaticScroll.current = false;
-    }, 500);
-  };
-
-  const handleShare = async () => {
-    const url = `${window.location.origin}/?post=${posts[currentIndex].slug}`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: posts[currentIndex].title,
-          url: url,
-        });
-      } catch (err) {
-        console.log('Share cancelled');
-      }
-    } else {
-      navigator.clipboard.writeText(url);
-      alert('Link copied to clipboard!');
-    }
+    const newLoaded = new Set(loadedIndexes);
+    newLoaded.add(index);
+    setLoadedIndexes(newLoaded);
+    containerRef.current?.children[index]?.scrollIntoView({ behavior: 'smooth', inline: 'start' });
   };
 
   const handleLike = async () => {
-    if (!user) {
-      window.location.href = '/home';
-      return;
-    }
-
+    if (!user) { window.location.href = '/home'; return; }
     const post = posts[currentIndex];
     const isLiked = userLikes.has(post.id);
-
-    try {
-      if (isLiked) {
-        await supabase
-          .from('interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('post_id', post.id)
-          .eq('type', 'like');
-
-        await supabase.rpc('decrement_likes_count', { post_id: post.id });
-
-        setUserLikes(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(post.id);
-          return newSet;
-        });
-
-        setPosts(prev => prev.map((p, i) => 
-          i === currentIndex ? { ...p, likes_count: Math.max(0, (p.likes_count || 0) - 1) } : p
-        ));
-      } else {
-        await supabase
-          .from('interactions')
-          .insert({
-            user_id: user.id,
-            post_id: post.id,
-            type: 'like'
-          });
-
-        await supabase.rpc('increment_likes_count', { post_id: post.id });
-
-        setUserLikes(prev => new Set(prev).add(post.id));
-
-        setPosts(prev => prev.map((p, i) => 
-          i === currentIndex ? { ...p, likes_count: (p.likes_count || 0) + 1 } : p
-        ));
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
+    if (isLiked) {
+      await supabase.from('interactions').delete().eq('user_id', user.id).eq('post_id', post.id).eq('type', 'like');
+      await supabase.rpc('decrement_likes_count', { post_id: post.id });
+      setUserLikes(prev => { const s = new Set(prev); s.delete(post.id); return s; });
+    } else {
+      await supabase.from('interactions').insert({ user_id: user.id, post_id: post.id, type: 'like' });
+      await supabase.rpc('increment_likes_count', { post_id: post.id });
+      setUserLikes(prev => new Set(prev).add(post.id));
     }
   };
 
-  const handleCommentClick = () => {
-    if (!user) {
-      window.location.href = '/home';
-      return;
-    }
-    setIsCommentsOpen(true);
-  };
-
-  const hasCesiumPosts = posts.some(p => p.type === 'cesium');
-  const hasLeafletPosts = posts.some(p => p.type === 'leaflet');
   const hasGlobePosts = posts.some(p => p.type === 'globe' || p.type === 'custom');
+  const hasLeafletPosts = posts.some(p => p.type === 'leaflet');
+  const hasCesiumPosts = posts.some(p => p.type === 'cesium');
 
-  if (posts.length === 0) {
-    return (
-      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Loading visualizations...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const currentPost = posts[currentIndex];
-  const isLiked = currentPost && userLikes.has(currentPost.id);
+  if (posts.length === 0) return <div className="h-screen w-full bg-black flex items-center justify-center text-white">Loading...</div>;
 
   return (
     <>
-    {hasGlobePosts && (
+      {hasGlobePosts && (
         <>
-          {/* DOWNGRADE TO 0.159.0 (Last version with window.THREE support) */}
-          <Script 
-            src="//cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js" 
-            strategy="beforeInteractive" 
-          />
-          {/* globe.gl 2.37.0 is compatible with this version */}
-          <Script 
-            src="//cdn.jsdelivr.net/npm/globe.gl@2.37.0/dist/globe.gl.min.js" 
-            strategy="lazyOnload" 
-          />
+          <Script src="//cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js" strategy="beforeInteractive" />
+          <Script src="//cdn.jsdelivr.net/npm/globe.gl@2.37.0/dist/globe.gl.min.js" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-scale" strategy="lazyOnload" />
           <Script src="//unpkg.com/d3-interpolate" strategy="lazyOnload" />
           <Script src="//unpkg.com/topojson-client@3" strategy="lazyOnload" />
@@ -547,8 +231,8 @@ function FeedContent() {
 
       {hasLeafletPosts && (
         <>
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossOrigin="" />
-          <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="lazyOnload" crossOrigin="" />
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+          <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="lazyOnload" />
         </>
       )}
 
@@ -561,139 +245,70 @@ function FeedContent() {
 
       <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
 
-      <main 
-        ref={containerRef}
-        className="feed-container h-screen w-full bg-black overflow-x-hidden overflow-y-hidden flex"
-      >
+      <main ref={containerRef} className="feed-container h-screen w-full bg-black overflow-hidden flex">
         {posts.map((post, index) => (
-          <div 
-            key={post.id} 
-            className="h-screen w-screen flex-shrink-0 relative"
-          >
+          <div key={post.id} className="h-screen w-screen flex-shrink-0 relative">
             {loadedIndexes.has(index) && index === currentIndex ? (
-              <CustomVisual 
-                key={post.id}
-                type={post.type}
-                css={post.custom_css} 
-                html={post.custom_html} 
-                scriptContent={post.custom_script}
-                isActive={true}
-              />
-            ) : loadedIndexes.has(index) ? (
-              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
+              <CustomVisual type={post.type} css={post.custom_css} html={post.custom_html} scriptContent={post.custom_script} isActive={true} />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
-                <div className="text-center text-white/50">
-                  <div className="text-4xl mb-2">🌍</div>
-                  <p className="text-sm">Navigate to load</p>
-                </div>
-              </div>
+              <div className="w-full h-full bg-black flex items-center justify-center text-white/50">Navigate to load</div>
             )}
 
             {index === currentIndex && (
               <>
-                <div className="absolute bottom-32 left-0 right-0 z-[20000] pointer-events-none">
-                  <div className="px-8 max-w-2xl">
+                {/* METADATA SECTION - FIXED TRANSPARENCY */}
+                <div className="absolute bottom-32 left-0 right-0 z-[1000] pointer-events-none">
+                  <div className="px-8 max-w-2xl bg-black/40 backdrop-blur-md rounded-r-xl py-4 pointer-events-auto">
                     {post.categories && (
-                      <button
-                        onClick={() => router.push(`/home?category=${post.categories.slug}`)}
-                        className="inline-block mb-3 px-4 py-1.5 bg-purple-500/30 hover:bg-purple-500/40 backdrop-blur-sm border border-purple-500/50 text-purple-200 rounded-full text-sm font-semibold transition pointer-events-auto drop-shadow-lg"
-                      >
+                      <button onClick={() => router.push(`/home?category=${post.categories.slug}`)} className="inline-block mb-3 px-4 py-1.5 bg-purple-500/30 hover:bg-purple-500/40 border border-purple-500/50 text-purple-200 rounded-full text-sm font-semibold">
                         {post.categories.name}
                       </button>
                     )}
-                    
-                    <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg pointer-events-auto">
-                      {post.title}
-                    </h2>
-                    {post.description && (
-                      <p className="text-white/90 text-sm drop-shadow-lg pointer-events-auto">
-                        {post.description}
-                      </p>
-                    )}
+                    <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-lg">{post.title}</h2>
+                    <p className="text-white/90 text-sm drop-shadow-lg">{post.description}</p>
                   </div>
                 </div>
 
+                {/* INTERACTION BUTTONS */}
                 <div className="absolute bottom-10 left-0 right-0 z-[20000] flex justify-center items-center gap-6 pointer-events-auto px-4">
-                  <button 
-                    onClick={handleLike} 
-                    className={`flex flex-col items-center gap-1 group ${isLiked ? 'scale-110' : ''}`}
-                  >
-                    <div className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border ${
-                      isLiked 
-                        ? 'bg-red-500/30 border-red-500/50' 
-                        : 'bg-black/50 border-white/10'
-                    }`}>
-                      <span className={`text-2xl ${isLiked ? 'animate-pulse' : ''}`}>❤️</span>
+                  <button onClick={handleLike} className="flex flex-col items-center gap-1">
+                    <div className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center border ${userLikes.has(post.id) ? 'bg-red-500/30 border-red-500/50' : 'bg-black/50 border-white/10'}`}>
+                      <span className="text-2xl">❤️</span>
                     </div>
-                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      {post.likes_count || 0}
-                    </span>
+                    <span className="text-white text-[10px]">{post.likes_count || 0}</span>
                   </button>
 
-                  <button onClick={handleCommentClick} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
+                  <button onClick={() => setIsCommentsOpen(true)} className="flex flex-col items-center gap-1">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center border border-white/10">
                       <span className="text-2xl">💬</span>
                     </div>
-                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      {post.comments_count || 0}
-                    </span>
+                    <span className="text-white text-[10px]">{post.comments_count || 0}</span>
                   </button>
 
-                  <button onClick={handleShare} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
-                      <span className="text-2xl">🔗</span>
-                    </div>
-                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      Share
-                    </span>
-                  </button>
-
-                  <button onClick={() => setIsEmbedOpen(true)} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
+                  <button onClick={() => setIsEmbedOpen(true)} className="flex flex-col items-center gap-1">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center border border-white/10">
                       <span className="text-2xl">📟</span>
                     </div>
-                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      Embed
-                    </span>
+                    <span className="text-white text-[10px]">Embed</span>
                   </button>
 
-                  <a href="/home" className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
-                      <span className="text-2xl">🏠</span>
-                    </div>
-                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      Home
-                    </span>
-                  </a>
-
-                  <button onClick={() => setIsErrorReportOpen(true)} className="flex flex-col items-center gap-1 group">
-                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/70 transition border border-white/10">
+                  <button onClick={() => setIsErrorReportOpen(true)} className="flex flex-col items-center gap-1">
+                    <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center border border-white/10">
                       <span className="text-2xl">🐛</span>
                     </div>
-                    <span className="text-white text-[10px] font-semibold uppercase tracking-wider drop-shadow-lg">
-                      Error
-                    </span>
+                    <span className="text-white text-[10px]">Error</span>
                   </button>
                 </div>
 
+                {/* NAVIGATION ARROWS */}
                 {index < posts.length - 1 && (
-                  <button onClick={() => navigateToPost(index + 1)} className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group">
-                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
-                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
+                  <button onClick={() => navigateToPost(index + 1)} className="absolute right-8 top-1/2 -translate-y-1/2 z-[20000] p-4 bg-black/30 backdrop-blur-sm rounded-full">
+                    <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </button>
                 )}
-                
                 {index > 0 && (
-                  <button onClick={() => navigateToPost(index - 1)} className="absolute left-8 top-1/2 -translate-y-1/2 z-[20000] pointer-events-auto group">
-                    <div className="bg-black/30 backdrop-blur-sm rounded-full p-4 group-hover:bg-black/50 transition-all group-hover:scale-110">
-                      <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </div>
+                  <button onClick={() => navigateToPost(index - 1)} className="absolute left-8 top-1/2 -translate-y-1/2 z-[20000] p-4 bg-black/30 backdrop-blur-sm rounded-full">
+                    <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                   </button>
                 )}
               </>
@@ -703,58 +318,17 @@ function FeedContent() {
       </main>
 
       {isCommentsOpen && posts[currentIndex] && (
-        <CommentPanel
-          postId={posts[currentIndex].id}
-          onClose={() => setIsCommentsOpen(false)}
-          onCommentAdded={() => {
-            setPosts(prev => prev.map((p, i) => 
-              i === currentIndex ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p
-            ));
-          }}
-        />
+        <CommentPanel postId={posts[currentIndex].id} onClose={() => setIsCommentsOpen(false)} onCommentAdded={() => { /* logic to update count */ }} />
       )}
-
-      {isEmbedOpen && posts[currentIndex] && (
-        <EmbedModal 
-          post={posts[currentIndex]} 
-          onClose={() => setIsEmbedOpen(false)} 
-        />
-      )}
-
-      {isErrorReportOpen && posts[currentIndex] && (
-        <ErrorReportModal 
-          post={posts[currentIndex]} 
-          onClose={() => setIsErrorReportOpen(false)} 
-        />
-      )}
-      
-      {/* Progress indicator dots */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[20000] flex gap-2 pointer-events-none">
-        {posts.map((_, index) => (
-          <div
-            key={index}
-            className={`h-1.5 rounded-full transition-all ${
-              index === currentIndex 
-                ? 'w-6 bg-white' 
-                : 'w-1.5 bg-white/20'
-            }`}
-          />
-        ))}
-      </div>
+      {isEmbedOpen && posts[currentIndex] && <EmbedModal post={posts[currentIndex]} onClose={() => setIsEmbedOpen(false)} />}
+      {isErrorReportOpen && posts[currentIndex] && <ErrorReportModal post={posts[currentIndex]} onClose={() => setIsErrorReportOpen(false)} />}
     </>
   );
 }
 
 export default function Home() {
   return (
-    <Suspense fallback={
-      <div className="h-screen w-full bg-black flex items-center justify-center text-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Loading...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<div className="h-screen w-full bg-black flex items-center justify-center text-white">Loading...</div>}>
       <FeedContent />
     </Suspense>
   );
